@@ -44,8 +44,8 @@ export function loadConfig(): Config {
     apiToken: process.env.QOBUZ_API_TOKEN,
     lastBabeBaseUrl: process.env.LASTBABE_BASE_URL ?? 'https://lastbabe.velixir.run',
     monochromeBaseUrl: process.env.MONOCHROME_BASE_URL ?? 'https://tracks.monochrome.st',
-    deezerBaseUrl: process.env.DEEZER_BASE_URL ?? 'https://dzr.tabs-vs-spaces.wtf',
-    eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL ?? 'https://eljohnzc-addon.de.deplexo.com/4433c7caff7fd070309e',
+    deezerBaseUrl: process.env.DEEZER_BASE_URL ?? 'https://x-addon.gian-precinio.workers.dev/bsdkmcbklmkjgmkcttks',
+    eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL ?? 'https://bitchord-hires-addon.vercel.app',
     instableBaseUrl: process.env.INSTABLE_BASE_URL ?? 'https://instable.arcod.xyz',
   };
 }
