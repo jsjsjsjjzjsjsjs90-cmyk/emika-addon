@@ -44,7 +44,7 @@ export function loadConfig(): Config {
     apiToken: process.env.QOBUZ_API_TOKEN,
     lastBabeBaseUrl: process.env.LASTBABE_BASE_URL ?? 'https://lastbabe.velixir.run',
     monochromeBaseUrl: process.env.MONOCHROME_BASE_URL ?? 'https://tracks.monochrome.st',
-    deezerBaseUrl: process.env.DEEZER_BASE_URL ?? 'https://dzr.tabs-vs-spaces.wtf',
+    deezerBaseUrl: process.env.DEEZER_BASE_URL ?? 'https://bluebit.jucepe0929.workers.dev',
     eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL ?? 'https://bitchord-hires-addon.vercel.app',
     instableBaseUrl: process.env.INSTABLE_BASE_URL ?? 'https://instable.arcod.xyz',
   };
