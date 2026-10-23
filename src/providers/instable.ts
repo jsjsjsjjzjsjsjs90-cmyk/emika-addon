@@ -43,28 +43,27 @@ export class InstableProvider implements QobuzProvider {
       .filter((track): track is QobuzTrack => track !== null);
   }
 
-  async getStream(
-    trackId: string,
-    quality: Quality,
-    _atmos: string,
-  ): Promise<QobuzStream | null> {
-    const body = await this.request(
-      `/api/player/stream/${encodeURIComponent(trackId)}`,
-      { quality: qualityId(quality) },
-    );
+async getStream(trackId: string, quality: Quality, _atmos: string): Promise<QobuzStream | null> {
+  // เปลี่ยน Path เป็น api/v2/downloads
+  // สมมติว่าพารามิเตอร์ชื่อ id (ต้องเช็คจาก Payload ของคุณว่าใช้คำว่าอะไร)
+  const body = await this.request('/api/v2/downloads', { 
+      id: trackId, // หรือ track_id ตามที่เว็บเขาใช้
+      quality: qualityId(quality) 
+  });
 
-    if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) {
-      return null;
-    }
-
-    return {
-      url: body.url,
-      format: mimeFormat(body.mimeType),
-      quality: typeof body.quality === 'number' ? String(body.quality) : quality,
-      manifest: 'none',
-      encrypted: false,
-    };
+  // สมมติว่า Response ส่ง url กลับมาตรงๆ (ต้องเช็คจากแท็บ Response)
+  if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) {
+    return null;
   }
+
+  return {
+    url: body.url,
+    format: 'flac',
+    quality: quality,
+    manifest: 'none',
+    encrypted: false,
+  };
+}
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
     const base = this.config.instableBaseUrl ?? 'https://instable.arcod.xyz';
