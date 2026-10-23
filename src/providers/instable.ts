@@ -123,6 +123,49 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
   };
 }
 
+interface LosslessSignal {
+  lossless: boolean;
+  format?: string;
+}
+
+function detectLossless(raw: RecordValue): LosslessSignal {
+  // 1) explicit format string (แม่นสุดถ้ามี)
+  if (typeof raw.format === 'string') {
+    const fmt = raw.format.toLowerCase().trim();
+    if (['flac', 'alac', 'wav', 'aiff', 'dsd'].includes(fmt)) {
+      return { lossless: true, format: fmt };
+    }
+    if (['mp3', 'aac', 'ogg', 'opus', 'm4a', 'wma'].includes(fmt)) {
+      return { lossless: false };
+    }
+  }
+
+  // 2) explicit quality string
+  if (typeof raw.quality === 'string') {
+    const q = raw.quality.toUpperCase().trim();
+    if (['LOSSLESS', 'HI_RES', 'HIRES', 'FLAC'].includes(q)) {
+      return { lossless: true, format: 'flac' };
+    }
+    if (['MP3', 'AAC', 'LOSSY'].includes(q)) {
+      return { lossless: false };
+    }
+  }
+
+  // 3) hires boolean (Qobuz-style)
+  if (raw.hires === true) {
+    return { lossless: true, format: 'flac' };
+  }
+
+  // 4) bit depth threshold — 16-bit คือ CD quality ขั้นต่ำ
+  //    🔑 จุดสำคัญ: >= 16 เท่านั้น ถึงจะถือว่า lossless
+  if (typeof raw.maximum_bit_depth === 'number' && raw.maximum_bit_depth >= 16) {
+    return { lossless: true, format: 'flac' };
+  }
+
+  // 5) ไม่มีหลักฐานชัดเจน → ปลอดภัยที่สุดคือไม่ติดป้าย
+  return { lossless: false };
+}
+
 function qualityId(quality: Quality): string { return quality === 'LOSSLESS' ? '27' : '5'; }
 function mimeFormat(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
