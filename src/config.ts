@@ -45,7 +45,7 @@ export function loadConfig(): Config {
     lastBabeBaseUrl: process.env.LASTBABE_BASE_URL ?? 'https://lastbabe.velixir.run/e/1792854914/3947bef1fd67198edfd79f1e414f8b3f',
     monochromeBaseUrl: process.env.MONOCHROME_BASE_URL ?? 'https://tracks.monochrome.st',
     deezerBaseUrl: process.env.DEEZER_BASE_URL ?? 'https://x-addon.gian-precinio.workers.dev/bsdkmcbklmkjgmkcttks',
-    eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL ?? 'https://bitchord-hires-addon.vercel.app',
+    eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL ?? 'https://eljohnzcaddon.velixir.run/c57e7b0ef2031b2f1fcd',
     instableBaseUrl: process.env.INSTABLE_BASE_URL ?? 'https://instable.arcod.xyz',
   };
 }
