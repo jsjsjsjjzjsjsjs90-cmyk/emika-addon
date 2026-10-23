@@ -57,7 +57,8 @@ export class LastBabeProvider implements QobuzProvider {
   }
 
   private async resolveBaseUrl(): Promise<string> {
-    const configured = this.config.lastBabeBaseUrl;https:
+    // 🔧 แก้ไข Typo: ลบ https: ที่เกินมาออกแล้ว
+    const configured = this.config.lastBabeBaseUrl;
     if (!configured) throw new UpstreamError(502, 'LastBabe backend is not configured');
     if (!configured.includes('lastbabe.velixir.run') || /\/e\/[^/]+\/[^/]+/.test(configured)) return configured.replace(/\/$/, '');
     if (this.resolvedBaseUrl && Date.now() < this.resolvedExpiresAt - 60_000) return this.resolvedBaseUrl;
@@ -72,17 +73,28 @@ export class LastBabeProvider implements QobuzProvider {
     const challenge = await challengeResponse.json() as { challenge?: unknown; difficulty?: unknown };
     if (typeof challenge.challenge !== 'string') throw new UpstreamError(502, 'LastBabe challenge was malformed');
     const difficulty = typeof challenge.difficulty === 'number' && challenge.difficulty >= 1 && challenge.difficulty <= 8 ? challenge.difficulty : 4;
+    
     const prefix = '0'.repeat(difficulty);
+    const challengeBase = Buffer.from(challenge.challenge, 'utf8');
     let nonce = 0;
     let found: string | undefined;
+
+    // 🔧 เพิ่มความเร็ว PoW: ใช้ Buffer ต่อ String และขยาย Batch Size
     while (!found) {
-      for (let i = 0; i < 20_000; i += 1) {
+      for (let i = 0; i < 100_000; i += 1) {
         nonce += 1;
         const candidate = String(nonce);
-        if (createHash('sha256').update(challenge.challenge + candidate).digest('hex').startsWith(prefix)) { found = candidate; break; }
+        // ใช้ Buffer.concat เร็วกว่าการบวก String ปกติ
+        const hash = createHash('sha256').update(Buffer.concat([challengeBase, Buffer.from(candidate)])).digest('hex');
+        if (hash.startsWith(prefix)) { 
+          found = candidate; 
+          break; 
+        }
       }
+      // ให้ Event Loop ได้พักบ้าง (แต่พักน้อยลง เพราะ Batch ใหญ่ขึ้น)
       if (!found) await new Promise(resolve => setImmediate(resolve));
     }
+
     const mintResponse = await fetch(`${root}mint`, {
       method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({ challenge: challenge.challenge, nonce: found }),
