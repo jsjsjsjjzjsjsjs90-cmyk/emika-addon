@@ -7,11 +7,15 @@ export class RacingProvider implements QobuzProvider {
 
   async search(query: string, quality: Quality, atmos: string): Promise<QobuzTrack[]> {
     return new Promise((resolve, reject) => {
+      let settled = false;
       let pending = this.sources.length;
       let lastError: unknown;
+
       for (const source of this.sources) {
         source.provider.search(query, quality, atmos).then(tracks => {
+          if (settled) return;
           if (tracks.length > 0) {
+            settled = true;
             resolve(tracks.map(track => ({ ...track, upstreamId: `${source.name}:${track.upstreamId}` })));
             return;
           }
@@ -20,7 +24,7 @@ export class RacingProvider implements QobuzProvider {
         }).catch(error => {
           lastError = error;
           pending -= 1;
-          if (pending === 0) reject(lastError);
+          if (pending === 0 && !settled) reject(lastError);
         });
       }
     });
