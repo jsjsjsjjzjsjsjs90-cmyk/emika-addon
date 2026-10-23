@@ -7,12 +7,15 @@ type RecordValue = Record<string, unknown>;
 export class InstableProvider implements QobuzProvider {
   constructor(private readonly config: Config) {}
 
-  async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
-    const body = await this.request('/api/search', { q: query });
-    const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
-    const items = data && isRecord(data.tracks) && Array.isArray(data.tracks.items) ? data.tracks.items : [];
-    return items.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
-  }
+async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const body = await this.request('/api/search', { q: trimmed });
+  const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
+  const items = data && isRecord(data.tracks) && Array.isArray(data.tracks.items) ? data.tracks.items : [];
+  return items.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
+}
 
   async getStream(trackId: string, quality: Quality, _atmos: string): Promise<QobuzStream | null> {
     const body = await this.request(`/api/player/stream/${encodeURIComponent(trackId)}`, { quality: qualityId(quality) });
