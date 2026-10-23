@@ -26,7 +26,7 @@ export class RemoteAddonProvider implements QobuzProvider {
   }
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
-    const base = this.configuredBaseUrl ?? this.config.deezerBaseUrl ?? 'https://dzr.tabs-vs-spaces.wtf';
+    const base = this.configuredBaseUrl ?? this.config.deezerBaseUrl ?? 'https://bitchord-hires-addon.vercel.app';
     const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const controller = new AbortController();
