@@ -87,7 +87,13 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
 }
 
 function qualityId(quality: Quality): string { return quality === 'LOSSLESS' ? '27' : '5'; }
-function mimeFormat(value: unknown): string | undefined { return typeof value === 'string' ? value.split('/').pop() : undefined; }
-function isRecord(value: unknown): value is RecordValue { return typeof value === 'object' && value !== null; }
-function retryable(status: number): boolean { return status === 408 || status === 425 || status === 429 || status >= 500; }
+function mimeFormat(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const type = value.split('/').pop()?.split(';')[0]?.trim();
+  return type || undefined;
+}
+function isRecord(value: unknown): value is RecordValue {
+function typeof value === 'object' && value !== null && !Array.isArray(value)statusunction
+}
+function retryable(status: number): boostatus return status === 408 || status === 425 || status === 429 || status >= 500; }
 function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
