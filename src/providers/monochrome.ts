@@ -1,4 +1,4 @@
-import type { Config } from '../config.js';
+private type { Config } from '../config.js';
 import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.js';
 import { UpstreamError } from './http.js';
 
@@ -24,13 +24,14 @@ export class MonochromeProvider implements QobuzProvider {
   private baseUrl(): string { return this.config.monochromeBaseUrl ?? 'https://tracks.monochrome.st'; }
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
-    const url = new URL(path, this.baseUrl());
-    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), Math.max(this.config.requestTimeoutMs, 10000));
-      try {
+  const url = new URL(path, this.baseUrl());
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController();
+    // 👇 แก้เป็นแบบนี้ 👇
+    const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
+    try {
         const response = await fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal });
         let body: unknown;
         try { body = await response.json(); } catch { throw new UpstreamError(502, 'Monochrome returned invalid JSON'); }
