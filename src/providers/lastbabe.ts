@@ -57,7 +57,7 @@ export class LastBabeProvider implements QobuzProvider {
   }
 
   private async resolveBaseUrl(): Promise<string> {
-    // 🔧 แก้ไข Typo: ลบ https: ที่เกินมาออกแล้ว
+    // 🔧 FIX: ลบ typo "https:" ที่ต่อท้ายบรรทัดนี้ออกแล้ว
     const configured = this.config.lastBabeBaseUrl;
     if (!configured) throw new UpstreamError(502, 'LastBabe backend is not configured');
     if (!configured.includes('lastbabe.velixir.run') || /\/e\/[^/]+\/[^/]+/.test(configured)) return configured.replace(/\/$/, '');
@@ -70,28 +70,36 @@ export class LastBabeProvider implements QobuzProvider {
     const root = landingUrl.endsWith('/') ? landingUrl : `${landingUrl}/`;
     const challengeResponse = await fetch(`${root}challenge`, { signal: AbortSignal.timeout(Math.max(this.config.requestTimeoutMs, 15000)) });
     if (!challengeResponse.ok) throw new UpstreamError(502, 'LastBabe challenge failed');
+    
     const challenge = await challengeResponse.json() as { challenge?: unknown; difficulty?: unknown };
     if (typeof challenge.challenge !== 'string') throw new UpstreamError(502, 'LastBabe challenge was malformed');
-    const difficulty = typeof challenge.difficulty === 'number' && challenge.difficulty >= 1 && challenge.difficulty <= 8 ? challenge.difficulty : 4;
     
+    const difficulty = typeof challenge.difficulty === 'number' && challenge.difficulty >= 1 && challenge.difficulty <= 8 ? challenge.difficulty : 4;
     const prefix = '0'.repeat(difficulty);
-    const challengeBase = Buffer.from(challenge.challenge, 'utf8');
+    
     let nonce = 0;
     let found: string | undefined;
+    
+    // 🚀 OPTIMIZATION: แปลง challenge เป็น Buffer ล่วงหน้าเพื่อลด Overhead
+    const challengeBase = Buffer.from(challenge.challenge, 'utf8');
 
-    // 🔧 เพิ่มความเร็ว PoW: ใช้ Buffer ต่อ String และขยาย Batch Size
     while (!found) {
+      // 🚀 OPTIMIZATION: เพิ่ม Batch Size เป็น 100,000 ต่อรอบ เพื่อลดการสลับ Context ของ Event Loop
       for (let i = 0; i < 100_000; i += 1) {
         nonce += 1;
         const candidate = String(nonce);
-        // ใช้ Buffer.concat เร็วกว่าการบวก String ปกติ
-        const hash = createHash('sha256').update(Buffer.concat([challengeBase, Buffer.from(candidate)])).digest('hex');
+        
+        // 🚀 OPTIMIZATION: ใช้ Buffer.concat เร็วกว่าการใช้ String + String มาก
+        const hash = createHash('sha256')
+          .update(Buffer.concat([challengeBase, Buffer.from(candidate)]))
+          .digest('hex');
+          
         if (hash.startsWith(prefix)) { 
           found = candidate; 
           break; 
         }
       }
-      // ให้ Event Loop ได้พักบ้าง (แต่พักน้อยลง เพราะ Batch ใหญ่ขึ้น)
+      // ถ้ายังหาไม่เจอ ให้ปล่อยให้ Event Loop ทำงานอื่นบ้าง 1 tick
       if (!found) await new Promise(resolve => setImmediate(resolve));
     }
 
@@ -100,10 +108,14 @@ export class LastBabeProvider implements QobuzProvider {
       body: JSON.stringify({ challenge: challenge.challenge, nonce: found }),
       signal: AbortSignal.timeout(Math.max(this.config.requestTimeoutMs, 15000)),
     });
+    
     if (!mintResponse.ok) throw new UpstreamError(502, 'LastBabe mint failed');
+    
     const minted = await mintResponse.json() as { manifestUrl?: unknown; addonUrl?: unknown; expiresAt?: unknown };
     const manifestUrl = typeof minted.manifestUrl === 'string' ? minted.manifestUrl : typeof minted.addonUrl === 'string' ? minted.addonUrl : undefined;
+    
     if (!manifestUrl || !/^https:\/\//i.test(manifestUrl)) throw new UpstreamError(502, 'LastBabe mint response was malformed');
+    
     const base = manifestUrl.replace(/\/manifest\.json$/, '').replace(/\/$/, '');
     this.resolvedBaseUrl = base;
     this.resolvedExpiresAt = typeof minted.expiresAt === 'number' ? minted.expiresAt * 1000 : Date.now() + 48 * 60 * 60 * 1000;
