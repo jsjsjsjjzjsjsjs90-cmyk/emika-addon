@@ -107,10 +107,17 @@ function classifyInstableFailure(body: RecordValue): InstableErrorInfo {
 function toTrack(raw: RecordValue): QobuzTrack | null {
   const id = raw.id;
   const title = raw.title;
-  if ((typeof id !== 'number' && typeof id !== 'string') || typeof title !== 'string' || !title.trim()) return null;
+  if ((typeof id !== 'number' && typeof id !== 'string') || typeof title !== 'string' || !title.trim()) {
+    return null;
+  }
+
   const performer = isRecord(raw.performer) ? raw.performer : undefined;
   const album = isRecord(raw.album) ? raw.album : undefined;
   const image = album && isRecord(album.image) ? album.image : undefined;
+
+  // 🔧 FIX: ใช้ detectLossless แทนการเช็ค typeof ตรงๆ
+  const { lossless } = detectLossless(raw);
+
   return {
     upstreamId: String(id),
     title: title.trim(),
@@ -118,8 +125,8 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
     album: album && typeof album.title === 'string' ? album.title : undefined,
     duration: typeof raw.duration === 'number' ? raw.duration : undefined,
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
-    format: typeof raw.maximum_bit_depth === 'number' ? 'flac' : undefined,
-    audioQuality: typeof raw.maximum_bit_depth === 'number' ? 'LOSSLESS' : undefined,
+    format: lossless ? 'flac' : undefined,
+    audioQuality: lossless ? 'LOSSLESS' : undefined,
   };
 }
 
