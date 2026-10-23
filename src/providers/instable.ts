@@ -1,4 +1,4 @@
-search' type { Config } from '../config.js';
+import type { Config } from '../config.js';
 import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.js';
 import { UpstreamError } from './http.js';
 
