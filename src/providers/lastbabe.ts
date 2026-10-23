@@ -57,7 +57,7 @@ export class LastBabeProvider implements QobuzProvider {
   }
 
   private async resolveBaseUrl(): Promise<string> {
-    const configured = this.config.lastBabeBaseUrl;
+    const configured = this.config.lastBabeBaseUrl;https://lastbabe.velixir.run/e/1792854914/3947bef1fd67198edfd79f1e414f8b3f
     if (!configured) throw new UpstreamError(502, 'LastBabe backend is not configured');
     if (!configured.includes('lastbabe.velixir.run') || /\/e\/[^/]+\/[^/]+/.test(configured)) return configured.replace(/\/$/, '');
     if (this.resolvedBaseUrl && Date.now() < this.resolvedExpiresAt - 60_000) return this.resolvedBaseUrl;
