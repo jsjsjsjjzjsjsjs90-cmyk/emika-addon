@@ -1,4 +1,4 @@
-import type { Config } from '../config.js';
+search' type { Config } from '../config.js';
 import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.js';
 import { UpstreamError } from './http.js';
 
@@ -30,7 +30,7 @@ export class InstableProvider implements QobuzProvider {
     const trimmed = query.trim();
     if (!trimmed) return [];
 
-    const body = await this.request('/api/search', { q: trimmed });
+    const body = await this.request('/api/get-music', { q: trimmed });
     const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
     const items =
       data && isRecord(data.tracks) && Array.isArray(data.tracks.items)
