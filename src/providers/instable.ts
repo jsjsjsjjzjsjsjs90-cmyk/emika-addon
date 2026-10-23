@@ -29,46 +29,80 @@ async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTra
     };
   }
 
-  private async request(path: string, params: Record<string, string>): Promise<unknown> {
-    const base = this.config.instableBaseUrl ?? 'https://instable.arcod.xyz';
-    const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
-    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    let lastError: unknown;
-    const maxAttempts = Math.max(this.config.upstreamRetries, 2);
-    for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), Math.max(this.config.requestTimeoutMs, 15000));
-      try {
-        const response = await fetch(url, {
-          headers: {
-            accept: 'application/json',
-            'accept-language': 'en-US,en;q=0.9',
-            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
-            referer: `${base.replace(/\/$/, '')}/`,
-            origin: base.replace(/\/$/, ''),
-          },
-          signal: controller.signal,
-        });
-        let body: unknown;
-        try { body = await response.json(); } catch { throw new UpstreamError(502, 'Instable returned invalid JSON'); }
-        if (!response.ok) {
-          const error = new UpstreamError(retryable(response.status) ? 502 : response.status === 404 ? 404 : 400, 'Instable request failed');
-          if (!retryable(response.status) || attempt >= maxAttempts) throw error;
-          lastError = error;
-        } else if (isRecord(body) && body.success === false) {
-          throw new UpstreamError(502, 'Instable request failed');
-        } else return body;
-      } catch (error) {
-        if (error instanceof UpstreamError) {
-          if (error.status !== 502 || attempt >= maxAttempts) throw error;
-          lastError = error;
-        } else lastError = error;
-      } finally { clearTimeout(timeout); }
-      await delay(200 * 2 ** attempt);
-    }
-    throw lastError instanceof UpstreamError ? lastError : new UpstreamError(502, 'Instable request failed');
-  }
+  interface InstableErrorInfo {
+  retryable: boolean;
+  status: number;
+  message: string;
 }
+
+function classifyInstableFailure(body: RecordValue): InstableErrorInfo {
+  const rawCode =
+    typeof body.code === 'number' ? body.code
+    : typeof body.statusCode === 'number' ? body.statusCode
+    : typeof body.status === 'number' ? body.status
+    : undefined;
+
+  const message =
+    typeof body.message === 'string' ? body.message
+    : typeof body.error === 'string' ? body.error
+    : isRecord(body.error) && typeof body.error.message === 'string' ? body.error.message
+    : 'Instable request failed';
+
+  if (rawCode !== undefined) {
+    if (retryable(rawCode)) return { retryable: true, status: 502, message };
+    if (rawCode === 404) return { retryable: false, status: 404, message };
+    if (rawCode === 401 || rawCode === 403) return { retryable: false, status: 401, message };
+    return { retryable: false, status: 400, message };
+  }
+
+  // ไม่มี code → assume business error → ไม่ retry
+  return { retryable: false, status: 400, message };
+}
+
+  private async request(path: string, params: Record<string, string>): Promise<unknown> {
+  const base = this.config.instableBaseUrl ?? 'https://instable.arcod.xyz';
+  const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  let lastError: unknown;
+  const maxAttempts = Math.max(this.config.upstreamRetries, 2);
+  for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max(this.config.requestTimeoutMs, 15000));
+    try {
+      const response = await fetch(url, {
+        headers: {
+          accept: 'application/json',
+          'accept-language': 'en-US,en;q=0.9',
+          'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+          referer: `${base.replace(/\/$/, '')}/`,
+          origin: base.replace(/\/$/, ''),
+        },
+        signal: controller.signal,
+      });
+      let body: unknown;
+      try { body = await response.json(); } catch { throw new UpstreamError(502, 'Instable returned invalid JSON'); }
+      if (!response.ok) {
+        const error = new UpstreamError(
+          retryable(response.status) ? 502 : response.status === 404 ? 404 : 400,
+          'Instable request failed',
+        );
+        if (!retryable(response.status) || attempt >= maxAttempts) throw error;
+        lastError = error;
+      } else if (isRecord(body) && body.success === false) {
+        // 🔧 FIX #5: แยก retryable vs permanent จาก body
+        const failure = classifyInstableFailure(body);
+        throw new UpstreamError(failure.status, failure.message);
+      } else return body;
+    } catch (error) {
+      if (error instanceof UpstreamError) {
+        if (error.status !== 502 || attempt >= maxAttempts) throw error;
+        lastError = error;
+      } else lastError = error;
+    } finally { clearTimeout(timeout); }
+    await delay(200 * 2 ** attempt);
+  }
+  throw lastError instanceof UpstreamError ? lastError : new UpstreamError(502, 'Instable request failed');
+  }
 
 function toTrack(raw: RecordValue): QobuzTrack | null {
   const id = raw.id;
