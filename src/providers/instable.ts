@@ -250,15 +250,13 @@ function detectLossless(raw: RecordValue): LosslessSignal {
 }
 
 function qualityId(quality: Quality): string {
-  // 🔧 FIX #9: ถ้า Quality มีค่าอื่นนอกจาก LOSSLESS ให้ throw แทน map เงียบๆ
   switch (quality) {
     case 'LOSSLESS':
       return '27';
     case 'HIGH':
+    case 'LOW':       // 👈 เพิ่มบรรทัดนี้เข้าไป
       return '5';
     default: {
-      // ถ้า Quality ไม่มี HIGH ใน type ให้ลบ case HIGH ออก
-      // แล้ว default จะ throw เมื่อมีค่าที่ไม่รู้จัก — ปลอดภัยกว่า map เงียบๆ
       const _exhaustive: never = quality;
       throw new Error(`Unknown quality: ${_exhaustive as string}`);
     }
