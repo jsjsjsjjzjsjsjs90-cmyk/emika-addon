@@ -80,7 +80,7 @@ async getStream(trackId: string, quality: Quality, _atmos: string): Promise<Qobu
       const controller = new AbortController();
 
       // 🔧 FIX #8: กัน NaN จาก undefined
-      const timeoutMs = Math.max(this.config.requestTimeoutMs ?? 0, 15000);
+      const timeoutMs = this.config.requestTimeoutMs ?? 6000;
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
