@@ -20,19 +20,16 @@ const manifests = {
   instable: { id: 'com.bitchord.qobuz.instable', name: 'Instable Lossless', version: '1.0.0' },
 } as const;
 
-// 🌟 1. เพิ่ม Route หน้าเว็บหลัก (ที่หายไป) กลับคืนมา
+// 🌟 1. เพิ่ม Route หน้าเว็บหลัก (ตัวที่หายไป)
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
 
-// 🌟 2. เพิ่ม Route เช็คสถานะเซิร์ฟเวอร์ทั่วไป
+// 🌟 2. เพิ่ม Route เช็คสถานะเซิร์ฟเวอร์
 app.get('/health', async () => ({ ok: true }));
 
 // 3. Route สำหรับเช็คสถานะ Source ทั้ง 6 เจ้า
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   const testQuery = request.query.q || 'love'; 
-  
-  const sourceNames: IsolatedSource[] = [
-    'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable'
-  ];
+  const sourceNames: IsolatedSource[] = ['qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable'];
 
   const results = await Promise.all(
     sourceNames.map(async (sourceName) => {
@@ -68,9 +65,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
     })
   );
 
-  const overallStatus = results.every(r => r.status === 'healthy' || r.status === 'empty') 
-    ? 'all_systems_operational' 
-    : 'partial_outage';
+  const overallStatus = results.every(r => r.status === 'healthy' || r.status === 'empty') ? 'all_systems_operational' : 'partial_outage';
 
   return {
     timestamp: new Date().toISOString(),
