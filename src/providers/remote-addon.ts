@@ -14,8 +14,15 @@ export class RemoteAddonProvider implements QobuzProvider {
   }
 
   async getStream(trackId: string, quality: Quality, atmos: string): Promise<QobuzStream | null> {
-    if (!/^[A-Za-z0-9_:-]+$/.test(trackId)) return null;
-    const body = await this.request(`/stream/${encodeURIComponent(trackId)}`, { quality, atmos });
+  if (!/^[A-Za-z0-9_:-]+$/.test(trackId)) return null;
+  
+  // 🌟 1. ตัดคำว่า 'dz:' ออกเผื่อ API ปลายทางไม่รู้จัก
+  const cleanId = trackId.replace(/^dz:/, '');
+
+  try {
+    // 🌟 2. ใช้ cleanId ในการยิงขอไฟล์
+    const body = await this.request(`/stream/${encodeURIComponent(cleanId)}`, { quality, atmos });
+    
     if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
     return {
       url: body.url, format: typeof body.format === 'string' ? body.format : undefined,
@@ -23,7 +30,11 @@ export class RemoteAddonProvider implements QobuzProvider {
       manifest: body.manifest === 'hls' || body.manifest === 'dash' ? body.manifest : 'none',
       encrypted: body.encrypted === true,
     };
+  } catch (error) {
+    // 🌟 3. ถ้า Server ปลายทางล่ม ให้ return null (ระบบจะได้ไม่แครชเป็น 502)
+    return null; 
   }
+}
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
     // 1. ดึงค่ามาและตัดช่องว่างหัวท้ายทิ้ง (trim)
