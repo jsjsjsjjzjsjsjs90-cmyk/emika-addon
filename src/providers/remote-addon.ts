@@ -14,7 +14,7 @@ export class RemoteAddonProvider implements QobuzProvider {
   }
 
   async getStream(trackId: string, quality: Quality, atmos: string): Promise<QobuzStream | null> {
-    if (!/^[A-Za-z0-9_-]+$/.test(trackId)) return null;
+    if (!/^[A-Za-z0-9_:-]+$/.test(trackId)) return null;
     const body = await this.request(`/stream/${encodeURIComponent(trackId)}`, { quality, atmos });
     if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
     return {
