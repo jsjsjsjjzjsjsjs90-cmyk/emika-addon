@@ -42,6 +42,7 @@ export function loadConfig(): Config {
     searchPath: process.env.QOBUZ_SEARCH_PATH,
     streamPath: process.env.QOBUZ_STREAM_PATH,
     apiToken: process.env.QOBUZ_API_TOKEN,
+    // 🌟 แก้ไข LastBabe ให้ใช้ลิงก์หลัก (ไม่ใช่ลิงก์ที่ Mint แล้ว)
     lastBabeBaseUrl: process.env.LASTBABE_BASE_URL ?? 'https://lastbabe.velixir.run',
     monochromeBaseUrl: process.env.MONOCHROME_BASE_URL ?? 'https://tracks.monochrome.st',
     deezerBaseUrl: process.env.DEEZER_BASE_URL ?? 'https://bitchord-hires-addon.vercel.app',
