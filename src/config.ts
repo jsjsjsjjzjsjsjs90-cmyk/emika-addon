@@ -18,35 +18,35 @@ export interface Config {
 }
 
 const positiveInt = (name: string, fallback: number): number => {
-  const value = Number(process.env[name] ?? fallback);
-  if (!Number.isInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer`);
+  const raw = process.env[name];
+  if (!raw || raw.trim() === '') return fallback; // ถ้าว่างให้ใช้ Default
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) return fallback; // ถ้าค่าผิดให้ใช้ Default
   return value;
 };
 
 export function loadConfig(): Config {
-  const provider = (process.env.QOBUZ_PROVIDER ?? 'multi').toLowerCase();
-  if (provider !== 'stub' && provider !== 'http' && provider !== 'qobuzdl' && provider !== 'multi') throw new Error('QOBUZ_PROVIDER must be stub, http, qobuzdl, or multi');
-  const apiBaseUrl = process.env.QOBUZ_API_BASE_URL ?? process.env.QOBUZ_UPSTREAM_BASE_URL ?? 'https://qobuz-dll.foreyou.workers.dev';
-  if (provider === 'http' && (!apiBaseUrl || !/^https:\/\//i.test(apiBaseUrl))) {
-    throw new Error('QOBUZ_API_BASE_URL must be an HTTPS URL when QOBUZ_PROVIDER=http');
-  }
+  const providerRaw = (process.env.QOBUZ_PROVIDER ?? 'multi').trim().toLowerCase();
+  const provider = (providerRaw === 'stub' || providerRaw === 'http' || providerRaw === 'qobuzdl' || providerRaw === 'multi') ? providerRaw : 'multi';
+  
+  const apiBaseUrl = process.env.QOBUZ_API_BASE_URL?.trim() || process.env.QOBUZ_UPSTREAM_BASE_URL?.trim() || 'https://qobuz-dll.foreyou.workers.dev';
+
   return {
     host: process.env.HOST ?? '0.0.0.0',
     port: positiveInt('PORT', Number(process.env.SERVER_PORT) || 3000),
     requestTimeoutMs: positiveInt('REQUEST_TIMEOUT_MS', 6000),
     upstreamRetries: positiveInt('UPSTREAM_RETRIES', 1),
     cacheTtlMs: positiveInt('CACHE_TTL_SECONDS', 300) * 1000,
-    idSecret: process.env.QOBUZ_ID_SECRET ?? 'qobuz-bitchord-id-secret-v1',
+    idSecret: process.env.QOBUZ_ID_SECRET?.trim() || 'qobuz-bitchord-id-secret-v1',
     provider,
     apiBaseUrl,
     searchPath: process.env.QOBUZ_SEARCH_PATH,
     streamPath: process.env.QOBUZ_STREAM_PATH,
     apiToken: process.env.QOBUZ_API_TOKEN,
-    // 🌟 แก้ไข LastBabe ให้ใช้ลิงก์หลัก (ไม่ใช่ลิงก์ที่ Mint แล้ว)
-    lastBabeBaseUrl: process.env.LASTBABE_BASE_URL ?? 'https://lastbabe.velixir.run',
-    monochromeBaseUrl: process.env.MONOCHROME_BASE_URL ?? 'https://tracks.monochrome.st',
-    deezerBaseUrl: process.env.DEEZER_BASE_URL ?? 'https://bitchord-hires-addon.vercel.app',
-    eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL ?? 'https://eljohnzcaddon.velixir.run/c57e7b0ef2031b2f1fcd',
-    instableBaseUrl: process.env.INSTABLE_BASE_URL ?? 'https://instable.arcod.xyz',
+    lastBabeBaseUrl: process.env.LASTBABE_BASE_URL?.trim() || 'https://lastbabe.velixir.run',
+    monochromeBaseUrl: process.env.MONOCHROME_BASE_URL?.trim() || 'https://tracks.monochrome.st',
+    deezerBaseUrl: process.env.DEEZER_BASE_URL?.trim() || 'https://bitchord-hires-addon.vercel.app',
+    eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL?.trim() || 'https://eljohnzcaddon.velixir.run/c57e7b0ef2031b2f1fcd',
+    instableBaseUrl: process.env.INSTABLE_BASE_URL?.trim() || 'https://instable.arcod.xyz',
   };
 }
