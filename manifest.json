@@ -1,6 +1,6 @@
 {
   "id": "com.bitchord.qobuz",
-  "name": "Qobuz",
+  "name": "emika addon",
   "version": "1.0.0",
   "resources": ["search", "stream"],
   "allowDownloads": 0,
