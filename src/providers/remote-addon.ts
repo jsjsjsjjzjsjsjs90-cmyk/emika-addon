@@ -14,47 +14,54 @@ export class RemoteAddonProvider implements QobuzProvider {
   }
 
   async getStream(trackId: string, quality: Quality, atmos: string): Promise<QobuzStream | null> {
-  if (!/^[A-Za-z0-9_:-]+$/.test(trackId)) return null;
-  const cleanId = trackId.replace(/^dz:/, '');
+    if (!/^[A-Za-z0-9_:-]+$/.test(trackId)) return null;
+    const cleanId = trackId.replace(/^dz:/, '');
 
-  try {
-    const body = await this.request(`/stream/${encodeURIComponent(cleanId)}`, { quality, atmos });
-    if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
-    return {
-      url: body.url, format: typeof body.format === 'string' ? body.format : undefined,
-      quality: typeof body.quality === 'string' ? body.quality : quality,
-      manifest: body.manifest === 'hls' || body.manifest === 'dash' ? body.manifest : 'none',
-      encrypted: body.encrypted === true,
-    };
-  } catch (error) {
-    return null; // ดัก Error ไม่ให้ Vercel พัง 502
+    try {
+      const body = await this.request(`/stream/${encodeURIComponent(cleanId)}`, { quality, atmos });
+      if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
+      return {
+        url: body.url, format: typeof body.format === 'string' ? body.format : undefined,
+        quality: typeof body.quality === 'string' ? body.quality : quality,
+        manifest: body.manifest === 'hls' || body.manifest === 'dash' ? body.manifest : 'none',
+        encrypted: body.encrypted === true,
+      };
+    } catch (error) {
+      return null;
+    }
   }
-}
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
-    // 1. ดึงค่ามาและตัดช่องว่างหัวท้ายทิ้ง (trim)
-let base = (this.configuredBaseUrl ?? this.config.deezerBaseUrl ?? 'https://bitchord-hires-addon.vercel.app').trim();
-
-// 2. ถ้าลืมใส่ https:// ให้เติมให้อัตโนมัติ
-if (!base.startsWith('http://') && !base.startsWith('https://')) {
-  base = 'https://' + base;
-}
-
-// 3. สร้าง URL ได้อย่างปลอดภัย
-const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
+    let base = (this.configuredBaseUrl ?? this.config.deezerBaseUrl ?? 'https://bitchord-hires-addon.vercel.app').trim();
+    if (!base.startsWith('http://') && !base.startsWith('https://')) {
+      base = 'https://' + base;
+    }
+    
+    const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
+    
     try {
       const response = await fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal });
       let body: unknown;
-      try { body = await response.json(); } catch { throw new UpstreamError(502, 'Deezer backend returned invalid JSON'); }
-      if (!response.ok) throw new UpstreamError(response.status >= 500 ? 502 : response.status, 'Deezer backend request failed');
+      try { 
+        body = await response.json(); 
+      } catch { 
+        throw new UpstreamError(502, 'Remote backend returned invalid JSON'); 
+      }
+      
+      // 🌟 แก้ Error Message ให้ไม่สับสน และแนบ HTTP Status มาด้วย
+      if (!response.ok) {
+        throw new UpstreamError(response.status >= 500 ? 502 : response.status, `Remote backend request failed (HTTP ${response.status})`);
+      }
       return body;
     } catch (error) {
       if (error instanceof UpstreamError) throw error;
-      throw new UpstreamError(502, 'Deezer backend request failed');
-    } finally { clearTimeout(timeout); }
+      throw new UpstreamError(502, 'Remote backend request failed');
+    } finally { 
+      clearTimeout(timeout); 
+    }
   }
 }
 
