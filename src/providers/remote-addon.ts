@@ -27,7 +27,7 @@ export class RemoteAddonProvider implements QobuzProvider {
         encrypted: body.encrypted === true,
       };
     } catch (error) {
-      return null;
+      return null; // 🛡️ Shield against 502s
     }
   }
 
@@ -43,7 +43,17 @@ export class RemoteAddonProvider implements QobuzProvider {
     const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
     
     try {
-      const response = await fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal });
+      const response = await fetch(url, { 
+        headers: { 
+          accept: 'application/json',
+          // 🛡️ THE CAMOUFLAGE
+          'accept-language': 'en-US,en;q=0.9,th;q=0.8',
+          'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+          'referer': base.replace(/\/$/, '') + '/',
+          'origin': base.replace(/\/$/, '')
+        }, 
+        signal: controller.signal 
+      });
       let body: unknown;
       try { 
         body = await response.json(); 
@@ -51,7 +61,6 @@ export class RemoteAddonProvider implements QobuzProvider {
         throw new UpstreamError(502, 'Remote backend returned invalid JSON'); 
       }
       
-      // 🌟 แก้ Error Message ให้ไม่สับสน และแนบ HTTP Status มาด้วย
       if (!response.ok) {
         throw new UpstreamError(response.status >= 500 ? 502 : response.status, `Remote backend request failed (HTTP ${response.status})`);
       }
