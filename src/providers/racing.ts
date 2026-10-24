@@ -6,15 +6,14 @@ export class RacingProvider implements QobuzProvider {
   constructor(private readonly sources: Source[]) {}
 
   async search(query: string, quality: Quality, atmos: string): Promise<QobuzTrack[]> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => { // Removed reject to prevent 500s
       let settled = false;
       let pending = this.sources.length;
-      let lastError: unknown;
 
       for (const source of this.sources) {
-        // 🛡️ CIRCUIT BREAKER: 3-second hard timeout per provider
+        // 3-second hard timeout per provider
         const timeoutPromise = new Promise<never>((_, rejectTimeout) => 
-          setTimeout(() => rejectTimeout(new Error('Source Timeout')), 3000)
+          setTimeout(() => rejectTimeout(new Error('Timeout')), 3000)
         );
 
         Promise.race([
@@ -29,11 +28,9 @@ export class RacingProvider implements QobuzProvider {
           }
           pending -= 1;
           if (pending === 0) resolve([]);
-        }).catch(error => {
-          lastError = error;
+        }).catch(() => {
           pending -= 1;
-          // 🛡️ If everything dies, return empty array instead of throwing 500
-          if (pending === 0 && !settled) resolve([]); 
+          if (pending === 0 && !settled) resolve([]); // If all fail, return empty
         });
       }
     });
