@@ -26,7 +26,7 @@ export class InstableProvider implements QobuzProvider {
         encrypted: false,
       };
     } catch (error) {
-      return null; // 🛡️ Shield against 502s
+      return null; // Fail gracefully, don't crash the server
     }
   }
 
