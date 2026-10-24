@@ -27,7 +27,7 @@ export class RemoteAddonProvider implements QobuzProvider {
         encrypted: body.encrypted === true,
       };
     } catch (error) {
-      return null; // 🛡️ Shield against 502s
+      return null; // Silent failure to protect the server
     }
   }
 
@@ -46,7 +46,6 @@ export class RemoteAddonProvider implements QobuzProvider {
       const response = await fetch(url, { 
         headers: { 
           accept: 'application/json',
-          // 🛡️ THE CAMOUFLAGE
           'accept-language': 'en-US,en;q=0.9,th;q=0.8',
           'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
           'referer': base.replace(/\/$/, '') + '/',
