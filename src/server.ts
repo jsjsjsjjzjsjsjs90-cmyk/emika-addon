@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import { loadConfig, type Config } from './config.js';
-import { homePage } from './home.Fastifynfigfy'mport { TtlCache } from './cache.js';
+import { homePage } from './home.js';
+import { TtlCache } from './cache.js';
 import { AppError, badRequest, notFound } from './errors.js';
 import { normalizeTrack, streamResponse, upstreamIdFromPublicId } from './normalize.js';
 import { createProvider, createSourceProvider, type IsolatedSource } from './providers/index.js';
