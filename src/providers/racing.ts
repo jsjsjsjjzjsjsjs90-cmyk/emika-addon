@@ -12,7 +12,15 @@ export class RacingProvider implements QobuzProvider {
       let lastError: unknown;
 
       for (const source of this.sources) {
-        source.provider.search(query, quality, atmos).then(tracks => {
+        // 🛡️ CIRCUIT BREAKER: 3-second hard timeout per provider
+        const timeoutPromise = new Promise<never>((_, rejectTimeout) => 
+          setTimeout(() => rejectTimeout(new Error('Source Timeout')), 3000)
+        );
+
+        Promise.race([
+          source.provider.search(query, quality, atmos),
+          timeoutPromise
+        ]).then(tracks => {
           if (settled) return;
           if (tracks.length > 0) {
             settled = true;
@@ -24,7 +32,8 @@ export class RacingProvider implements QobuzProvider {
         }).catch(error => {
           lastError = error;
           pending -= 1;
-          if (pending === 0 && !settled) reject(lastError);
+          // 🛡️ If everything dies, return empty array instead of throwing 500
+          if (pending === 0 && !settled) resolve([]); 
         });
       }
     });
