@@ -26,8 +26,16 @@ export class RemoteAddonProvider implements QobuzProvider {
   }
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
-    const base = this.configuredBaseUrl ?? this.config.deezerBaseUrl ?? 'https://bitchord-hires-addon.vercel.app';
-    const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
+    // 1. ดึงค่ามาและตัดช่องว่างหัวท้ายทิ้ง (trim)
+let base = (this.configuredBaseUrl ?? this.config.deezerBaseUrl ?? 'https://bitchord-hires-addon.vercel.app').trim();
+
+// 2. ถ้าลืมใส่ https:// ให้เติมให้อัตโนมัติ
+if (!base.startsWith('http://') && !base.startsWith('https://')) {
+  base = 'https://' + base;
+}
+
+// 3. สร้าง URL ได้อย่างปลอดภัย
+const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
