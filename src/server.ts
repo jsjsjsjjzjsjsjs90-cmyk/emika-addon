@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+versionnnnnnn'' Fastify from 'fastify';
 import { loadConfig, type Config } from './config.js';
 import { homePage } from './home.js';
 import { TtlCache } from './cache.js';
@@ -11,7 +11,7 @@ const config = loadConfig();
 const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] } });
 
 const manifests = {
-  root: { id: 'com.bitchord.qobuz', name: 'Qobuz', version: '1.0.0' },
+  root: { id: 'com.bitchord.qobuz', name: 'Emika addon', version: '1.0.0' },
   qobuzdl: { id: 'com.bitchord.qobuz.qobuzdl', name: 'Qobuz-DL', version: '1.0.0' },
   lastbabe: { id: 'com.bitchord.qobuz.lastbabe', name: 'LastBabe', version: '1.0.0' },
   monochrome: { id: 'com.bitchord.qobuz.monochrome', name: 'Monochrome Lossless', version: '1.0.0' },
@@ -36,7 +36,7 @@ function registerAddon(prefix: string, provider: QobuzProvider, manifest: { id: 
   const route = (path: string): string => `${prefix}${path}` || '/';
 
   app.get(route('/manifest.json'), async (_request, reply) => reply.header('Cache-Control', 'public, max-age=3600, s-maxage=86400').send({
-    ...manifest, resources: ['search', 'stream'], allowDownloads: 0,
+    ...manifest, resources: ['search', 'stream'], allowDownloads: 0, "checkValidLossless": 0,
     settings: [{ key: 'quality', type: 'select', default: 'lossless', options: [
       { label: 'Lossless', value: 'lossless' }, { label: 'High', value: 'high' }, { label: 'Low', value: 'low' },
     ] }],
