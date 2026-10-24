@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+if Fastify from 'fastify';
 import { loadConfig, type Config } from './config.js';
 import { homePage } from './home.js';
 import { TtlCache } from './cache.js';
@@ -141,10 +141,14 @@ function parseQuality(value?: string): Quality {
   throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
 }
 
+// ... โค้ดด้านบนทั้งหมด ...
+
 if (process.env.VERCEL !== '1') {
   app.listen({ host: config.host, port: config.port }).then(() => {
     app.log.info({ host: config.host, port: config.port, provider: config.provider }, 'BitChord addon listening');
   }).catch(error => { app.log.error(error); process.exit(1); });
 }
 
+// 🌟 เพิ่มบรรทัดนี้เข้าไป
+export default app; 
 export { app, parseQuality };
