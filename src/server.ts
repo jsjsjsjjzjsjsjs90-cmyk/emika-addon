@@ -20,28 +20,30 @@ const manifests = {
   instable: { id: 'com.bitchord.qobuz.instable', name: 'Instable Lossless', version: '1.0.0' },
 } as const;
 
-// เพิ่ม Route นี้ต่อจาก app.get('/health', ...) เดิม
+// 🌟 1. เพิ่ม Route หน้าเว็บหลัก (ที่หายไป) กลับคืนมา
+app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
+
+// 🌟 2. เพิ่ม Route เช็คสถานะเซิร์ฟเวอร์ทั่วไป
+app.get('/health', async () => ({ ok: true }));
+
+// 3. Route สำหรับเช็คสถานะ Source ทั้ง 6 เจ้า
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
-  // ใช้คำค้นหา "test" หรือ "love" ในการทดสอบ (หรือรับค่าจาก ?q=)
   const testQuery = request.query.q || 'love'; 
   
   const sourceNames: IsolatedSource[] = [
     'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable'
   ];
 
-  // ยิงทดสอบทุก Source พร้อมกัน
   const results = await Promise.all(
     sourceNames.map(async (sourceName) => {
       const provider = createSourceProvider(config, sourceName);
       const startTime = Date.now();
       
       try {
-        // สร้าง Timeout 8 วินาที (ถ้า Source ไม่ตอบภายใน 8 วิ ถือว่า Timeout)
         const timeoutPromise = new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error('Timeout')), 8000)
         );
 
-        // แข่งกันระหว่างการค้นหา กับ Timeout
         const tracks = await Promise.race([
           provider.search(testQuery, 'LOSSLESS', 'auto'),
           timeoutPromise
@@ -51,14 +53,14 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
 
         return {
           source: sourceName,
-          status: tracks.length > 0 ? 'healthy' : 'empty', // empty = ทำงานได้แต่หาไม่เจอ
-          latencyMs: latency, // ความเร็วในการตอบสนอง (ยิ่งน้อยยิ่งดี)
+          status: tracks.length > 0 ? 'healthy' : 'empty',
+          latencyMs: latency,
           resultCount: tracks.length,
         };
       } catch (error: any) {
         return {
           source: sourceName,
-          status: 'unhealthy', // พัง, Timeout, หรือ Rate Limit
+          status: 'unhealthy',
           latencyMs: Date.now() - startTime,
           error: error.message || 'Unknown error',
         };
@@ -66,7 +68,6 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
     })
   );
 
-  // คำนวณภาพรวม
   const overallStatus = results.every(r => r.status === 'healthy' || r.status === 'empty') 
     ? 'all_systems_operational' 
     : 'partial_outage';
