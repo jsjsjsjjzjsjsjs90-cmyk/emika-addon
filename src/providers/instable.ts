@@ -4,41 +4,29 @@ import { UpstreamError } from './http.js';
 
 type RecordValue = Record<string, unknown>;
 
-interface InstableErrorInfo { retryable: boolean; status: number; message: string; }
-interface LosslessSignal { lossless: boolean; format?: string; }
-
 export class InstableProvider implements QobuzProvider {
   constructor(private readonly config: Config) {}
 
   async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
-    const trimmed = query.trim();
-    if (!trimmed) return [];
-
-    const body = await this.request('/api/get-music', { q: trimmed });
+    const body = await this.request('/api/search', { q: query });
     const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
     const items = data && isRecord(data.tracks) && Array.isArray(data.tracks.items) ? data.tracks.items : [];
-
     return items.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
   }
 
   async getStream(trackId: string, quality: Quality, _atmos: string): Promise<QobuzStream | null> {
     try {
-      const body = await this.request('/api/v2/downloads', { id: trackId, quality: qualityId(quality) });
-
-      if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) {
-        return null;
-      }
-
+      const body = await this.request(`/api/player/stream/${encodeURIComponent(trackId)}`, { quality: qualityId(quality) });
+      if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
       return {
         url: body.url,
-        format: 'flac',
-        quality: quality,
+        format: mimeFormat(body.mimeType),
+        quality: typeof body.quality === 'number' ? String(body.quality) : quality,
         manifest: 'none',
         encrypted: false,
       };
     } catch (error) {
-      // 🌟 เพิ่ม try-catch ดัก Error ไม่ให้ระบบล่ม
-      return null;
+      return null; // 🛡️ Shield against 502s
     }
   }
 
@@ -46,16 +34,13 @@ export class InstableProvider implements QobuzProvider {
     const base = this.config.instableBaseUrl ?? 'https://instable.arcod.xyz';
     const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-
+    
     let lastError: unknown;
-    let lastStatus: number | undefined;
-    const maxAttempts = Math.max(this.config.upstreamRetries ?? 0, 2);
-
+    const maxAttempts = Math.max(this.config.upstreamRetries, 2);
+    
     for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
       const controller = new AbortController();
-      const timeoutMs = this.config.requestTimeoutMs ?? 6000;
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
+      const timeout = setTimeout(() => controller.abort(), Math.max(this.config.requestTimeoutMs, 15000));
       try {
         const response = await fetch(url, {
           headers: {
@@ -67,64 +52,36 @@ export class InstableProvider implements QobuzProvider {
           },
           signal: controller.signal,
         });
-
-        lastStatus = response.status;
-
         let body: unknown;
         try { body = await response.json(); } catch { throw new UpstreamError(502, 'Instable returned invalid JSON'); }
-
+        
         if (!response.ok) {
           const error = new UpstreamError(retryable(response.status) ? 502 : response.status === 404 ? 404 : 400, 'Instable request failed');
           if (!retryable(response.status) || attempt >= maxAttempts) throw error;
           lastError = error;
         } else if (isRecord(body) && body.success === false) {
-          const failure = classifyInstableFailure(body);
-          throw new UpstreamError(failure.status, failure.message);
-        } else {
-          return body;
-        }
+          throw new UpstreamError(502, 'Instable request failed');
+        } else return body;
+        
       } catch (error) {
         if (error instanceof UpstreamError) {
           if (error.status !== 502 || attempt >= maxAttempts) throw error;
           lastError = error;
-        } else {
-          lastError = error;
-        }
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      const baseDelay = lastStatus === 429 ? 5000 : 200;
-      await delay(baseDelay * 2 ** attempt);
+        } else lastError = error;
+      } finally { clearTimeout(timeout); }
+      await delay(200 * 2 ** attempt);
     }
-
     throw lastError instanceof UpstreamError ? lastError : new UpstreamError(502, 'Instable request failed');
   }
-}
-
-function classifyInstableFailure(body: RecordValue): InstableErrorInfo {
-  const rawCode = typeof body.code === 'number' ? body.code : typeof body.statusCode === 'number' ? body.statusCode : typeof body.status === 'number' ? body.status : undefined;
-  const message = typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : isRecord(body.error) && typeof body.error.message === 'string' ? body.error.message : 'Instable request failed';
-
-  if (rawCode !== undefined) {
-    if (retryable(rawCode)) return { retryable: true, status: 502, message };
-    if (rawCode === 404) return { retryable: false, status: 404, message };
-    if (rawCode === 401 || rawCode === 403) return { retryable: false, status: 401, message };
-    return { retryable: false, status: 400, message };
-  }
-  return { retryable: false, status: 400, message };
 }
 
 function toTrack(raw: RecordValue): QobuzTrack | null {
   const id = raw.id;
   const title = raw.title;
   if ((typeof id !== 'number' && typeof id !== 'string') || typeof title !== 'string' || !title.trim()) return null;
-
   const performer = isRecord(raw.performer) ? raw.performer : undefined;
   const album = isRecord(raw.album) ? raw.album : undefined;
   const image = album && isRecord(album.image) ? album.image : undefined;
-  const { lossless } = detectLossless(raw);
-
   return {
     upstreamId: String(id),
     title: title.trim(),
@@ -132,36 +89,13 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
     album: album && typeof album.title === 'string' ? album.title : undefined,
     duration: typeof raw.duration === 'number' ? raw.duration : undefined,
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
-    format: lossless ? 'flac' : undefined,
-    audioQuality: lossless ? 'LOSSLESS' : undefined,
+    format: typeof raw.maximum_bit_depth === 'number' ? 'flac' : undefined,
+    audioQuality: typeof raw.maximum_bit_depth === 'number' ? 'LOSSLESS' : undefined,
   };
 }
 
-function detectLossless(raw: RecordValue): LosslessSignal {
-  if (typeof raw.format === 'string') {
-    const fmt = raw.format.toLowerCase().trim();
-    if (['flac', 'alac', 'wav', 'aiff', 'dsd'].includes(fmt)) return { lossless: true, format: fmt };
-    if (['mp3', 'aac', 'ogg', 'opus', 'm4a', 'wma'].includes(fmt)) return { lossless: false };
-  }
-  if (typeof raw.quality === 'string') {
-    const q = raw.quality.toUpperCase().trim();
-    if (['LOSSLESS', 'HI_RES', 'HIRES', 'FLAC'].includes(q)) return { lossless: true, format: 'flac' };
-    if (['MP3', 'AAC', 'LOSSY'].includes(q)) return { lossless: false };
-  }
-  if (raw.hires === true) return { lossless: true, format: 'flac' };
-  if (typeof raw.maximum_bit_depth === 'number' && raw.maximum_bit_depth >= 16) return { lossless: true, format: 'flac' };
-  return { lossless: false };
-}
-
-function qualityId(quality: Quality): string {
-  switch (quality) {
-    case 'LOSSLESS': return '27';
-    case 'HIGH':
-    case 'LOW': return '5';
-    default: throw new Error(`Unknown quality`);
-  }
-}
-
-function isRecord(value: unknown): value is RecordValue { return typeof value === 'object' && value !== null && !Array.isArray(value); }
+function qualityId(quality: Quality): string { return quality === 'LOSSLESS' ? '27' : '5'; }
+function mimeFormat(value: unknown): string | undefined { return typeof value === 'string' ? value.split('/').pop() : undefined; }
+function isRecord(value: unknown): value is RecordValue { return typeof value === 'object' && value !== null; }
 function retryable(status: number): boolean { return status === 408 || status === 425 || status === 429 || status >= 500; }
-function delay(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
