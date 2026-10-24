@@ -1,4 +1,4 @@
-versionnnnnnn'' Fastify from 'fastify';
+import Fastify from 'fastify';
 import { loadConfig, type Config } from './config.js';
 import { homePage } from './home.js';
 import { TtlCache } from './cache.js';
