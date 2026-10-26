@@ -38,7 +38,7 @@ export function createSourceProvider(config: Config, source: IsolatedSource): Qo
 
   if (source === 'eljohnzc') return new StubQobuzProvider();
   if (source === 'instable') return new InstableProvider(config);
-  if (source === 'lastbabe') return new LastBabeProvider();
+  if (source === 'lastbabe') return new StubQobuzProvider();
   if (source === 'monochrome') return new MonochromeProvider(config);
   if (source === 'qobuzdl') return new QobuzDlProvider({
     ...config,
