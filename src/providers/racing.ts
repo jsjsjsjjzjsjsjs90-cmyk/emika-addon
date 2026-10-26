@@ -1,36 +1,31 @@
 import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.js';
 
-interface Source { name: string; provider: QobuzProvider }
+export interface RacingSource { name: string; provider: QobuzProvider }
 
 export class RacingProvider implements QobuzProvider {
-  constructor(private readonly sources: Source[]) {}
+  constructor(private readonly sources: RacingSource[]) {}
 
   async search(query: string, quality: Quality, atmos: string): Promise<QobuzTrack[]> {
-    return new Promise((resolve) => { // Removed reject to prevent 500s
-      let settled = false;
-      let pending = this.sources.length;
-
-      for (const source of this.sources) {
-        // 3-second hard timeout per provider
-        const timeoutPromise = new Promise<never>((_, rejectTimeout) => 
-          setTimeout(() => rejectTimeout(new Error('Timeout')), 3000)
-        );
-
-        Promise.race([
-          source.provider.search(query, quality, atmos),
-          timeoutPromise
-        ]).then(tracks => {
-          if (settled) return;
+    const active = this.sources.filter(s => s.provider);
+    if (active.length === 0) return [];
+    return new Promise((resolve, reject) => {
+      let pending = active.length;
+      let lastError: unknown;
+      for (const source of active) {
+        source.provider.search(query, quality, atmos).then(tracks => {
           if (tracks.length > 0) {
-            settled = true;
-            resolve(tracks.map(track => ({ ...track, upstreamId: `${source.name}:${track.upstreamId}` })));
+            resolve(tracks.map(track => ({
+              ...track,
+              upstreamId: `${source.name}:${track.upstreamId}`,
+            })));
             return;
           }
           pending -= 1;
           if (pending === 0) resolve([]);
-        }).catch(() => {
+        }).catch(error => {
+          lastError = error;
           pending -= 1;
-          if (pending === 0 && !settled) resolve([]); // If all fail, return empty
+          if (pending === 0) reject(lastError);
         });
       }
     });
@@ -48,19 +43,19 @@ export class RacingProvider implements QobuzProvider {
 
 export function createRacingProvider(
   qobuzdl: QobuzProvider,
-  lastbabe: QobuzProvider,
+  lastbabe?: QobuzProvider,
   monochrome?: QobuzProvider,
   deezer?: QobuzProvider,
   eljohnzc?: QobuzProvider,
   instable?: QobuzProvider,
+  gdstudio?: QobuzProvider,
 ): QobuzProvider {
-  const sources: Source[] = [
-    { name: 'lastbabe', provider: lastbabe },
-    { name: 'qobuzdl', provider: qobuzdl },
-  ];
-  if (deezer) sources.unshift({ name: 'deezer', provider: deezer });
+  const sources: RacingSource[] = [{ name: 'qobuzdl', provider: qobuzdl }];
+  if (lastbabe)  sources.push({ name: 'lastbabe',  provider: lastbabe });
   if (monochrome) sources.unshift({ name: 'monochrome', provider: monochrome });
-  if (eljohnzc) sources.unshift({ name: 'eljohnzc', provider: eljohnzc });
-  if (instable) sources.unshift({ name: 'instable', provider: instable });
+  if (deezer)     sources.unshift({ name: 'deezer',     provider: deezer });
+  if (eljohnzc)   sources.unshift({ name: 'eljohnzc',   provider: eljohnzc });
+  if (instable)   sources.unshift({ name: 'instable',   provider: instable });
+  if (gdstudio)   sources.unshift({ name: 'gdstudio',   provider: gdstudio });
   return new RacingProvider(sources);
 }
