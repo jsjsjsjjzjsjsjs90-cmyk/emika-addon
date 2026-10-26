@@ -18,7 +18,6 @@ const manifests = {
   deezer:     { id: 'com.bitchord.qobuz.deezer',     name: 'Deezer Fallback',          version: '1.0.0' },
   eljohnzc:   { id: 'com.bitchord.qobuz.eljohnzc',   name: 'Eljohnzc Lossless',        version: '1.0.0' },
   instable:   { id: 'com.bitchord.qobuz.instable',   name: 'Instable Lossless',        version: '1.0.0' },
-  gdstudio:   { id: 'com.bitchord.qobuz.gdstudio',   name: 'Qobuz + Tidal (gdstudio)', version: '1.0.0' },
 } as const;
 
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
@@ -27,7 +26,7 @@ app.get('/health', async () => ({ ok: true }));
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   const testQuery = request.query.q || 'love';
   const sourceNames: IsolatedSource[] = [
-    'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable', 'gdstudio',
+    'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable',
   ];
 
   const results = await Promise.all(
@@ -84,14 +83,13 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   };
 });
 
-registerAddon('',   createProvider(config),                    manifests.root);
+registerAddon('/',   createProvider(config),                    manifests.root);
 registerAddon('/a', createSourceProvider(config, 'qobuzdl'),   manifests.qobuzdl);
 registerAddon('/b', createSourceProvider(config, 'lastbabe'),  manifests.lastbabe);
 registerAddon('/c', createSourceProvider(config, 'monochrome'), manifests.monochrome);
 registerAddon('/d', createSourceProvider(config, 'deezer'),    manifests.deezer);
 registerAddon('/e', createSourceProvider(config, 'eljohnzc'),  manifests.eljohnzc);
 registerAddon('/f', createSourceProvider(config, 'instable'),  manifests.instable);
-registerAddon('/g', createSourceProvider(config, 'gdstudio'),  manifests.gdstudio);
 
 function registerAddon(prefix: string, provider: QobuzProvider, manifest: { id: string; name: string; version: string }): void {
   const searchCache = new TtlCache<PublicTrack[]>(config.cacheTtlMs);
