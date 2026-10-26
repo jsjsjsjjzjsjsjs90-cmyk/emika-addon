@@ -48,7 +48,6 @@ export function createRacingProvider(
   deezer?: QobuzProvider,
   eljohnzc?: QobuzProvider,
   instable?: QobuzProvider,
-  gdstudio?: QobuzProvider,
 ): QobuzProvider {
   const sources: RacingSource[] = [{ name: 'qobuzdl', provider: qobuzdl }];
   if (lastbabe)  sources.push({ name: 'lastbabe',  provider: lastbabe });
@@ -56,6 +55,5 @@ export function createRacingProvider(
   if (deezer)     sources.unshift({ name: 'deezer',     provider: deezer });
   if (eljohnzc)   sources.unshift({ name: 'eljohnzc',   provider: eljohnzc });
   if (instable)   sources.unshift({ name: 'instable',   provider: instable });
-  if (gdstudio)   sources.unshift({ name: 'gdstudio',   provider: gdstudio });
   return new RacingProvider(sources);
 }
