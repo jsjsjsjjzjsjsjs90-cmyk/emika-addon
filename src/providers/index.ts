@@ -21,7 +21,7 @@ export function createProvider(config: Config): QobuzProvider {
     return createRacingProvider(
       new QobuzDlProvider(config),
       undefined,
-      new MonochromeProvider(config),
+      undefined,
       undefined,
       undefined,
       new InstableProvider(config),
