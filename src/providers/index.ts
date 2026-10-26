@@ -8,12 +8,10 @@ import { createRacingProvider } from './racing.js';
 import { MonochromeProvider } from './monochrome.js';
 import { RemoteAddonProvider } from './remote-addon.js';
 import { InstableProvider } from './instable.js';
-import { GdstudioProvider } from './gdstudio.js';
 
 export type IsolatedSource =
   | 'qobuzdl' | 'lastbabe' | 'monochrome'
-  | 'deezer' | 'eljohnzc' | 'instable'
-  | 'gdstudio';
+  | 'deezer' | 'eljohnzc' | 'instable';
 
 export function createProvider(config: Config): QobuzProvider {
   if (config.provider === 'qobuzdl') return new QobuzDlProvider(config);
@@ -24,8 +22,7 @@ export function createProvider(config: Config): QobuzProvider {
       undefined,
       undefined,
       undefined,
-      new InstableProvider(config),
-      new GdstudioProvider(config),
+      new InstableProvider(config);
     );
   }
   if (config.provider === 'http') return new HttpQobuzProvider(config);
@@ -34,8 +31,6 @@ export function createProvider(config: Config): QobuzProvider {
 
 export function createSourceProvider(config: Config, source: IsolatedSource): QobuzProvider {
   if (source === 'deezer')   return new RemoteAddonProvider(config);
-  if (source === 'gdstudio') return new GdstudioProvider(config);
-
   if (source === 'eljohnzc') return new StubQobuzProvider();
   if (source === 'instable') return new InstableProvider(config);
   if (source === 'lastbabe') return new StubQobuzProvider();
