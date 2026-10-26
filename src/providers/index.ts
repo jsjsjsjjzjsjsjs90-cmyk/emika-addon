@@ -17,12 +17,12 @@ export function createProvider(config: Config): QobuzProvider {
   if (config.provider === 'qobuzdl') return new QobuzDlProvider(config);
   if (config.provider === 'multi') {
     return createRacingProvider(
-      new QobuzDlProvider(config),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      new InstableProvider(config);
+      new QobuzDlProvider(config), 
+      undefined, // LastBabe
+      undefined, // Monochrome
+      undefined, // Deezer
+      undefined, // Eljohnzc
+      new InstableProvider(config) // 🌟 แก้ไขตรงนี้ ลบ ; ออก
     );
   }
   if (config.provider === 'http') return new HttpQobuzProvider(config);
