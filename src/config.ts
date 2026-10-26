@@ -15,6 +15,16 @@ export interface Config {
   deezerBaseUrl?: string;
   eljohnzcBaseUrl?: string;
   instableBaseUrl?: string;
+  // Instable overrides (all optional)
+  instableSearchPath?: string;
+  instableStreamPath?: string;
+  instableSource?: string;
+  instableSendSource?: boolean;
+  instableQualityLossless?: string;
+  instableQualityHigh?: string;
+  instableQualityLow?: string;
+  instableApiToken?: string;
+  instableUserAgent?: string;
 }
 
 const positiveInt = (name: string, fallback: number): number => {
@@ -28,7 +38,7 @@ const positiveInt = (name: string, fallback: number): number => {
 export function loadConfig(): Config {
   const providerRaw = (process.env.QOBUZ_PROVIDER ?? 'multi').trim().toLowerCase();
   const provider = (providerRaw === 'stub' || providerRaw === 'http' || providerRaw === 'qobuzdl' || providerRaw === 'multi') ? providerRaw : 'multi';
-  
+
   const apiBaseUrl = process.env.QOBUZ_API_BASE_URL?.trim() || process.env.QOBUZ_UPSTREAM_BASE_URL?.trim() || 'https://qobuz-dll.foreyou.workers.dev';
 
   return {
@@ -48,5 +58,15 @@ export function loadConfig(): Config {
     deezerBaseUrl: process.env.DEEZER_BASE_URL?.trim() || 'https://bitchord-hires-addon.vercel.app',
     eljohnzcBaseUrl: process.env.ELJOHNZC_BASE_URL?.trim() || 'https://eljohnzcaddon.velixir.run/c57e7b0ef2031b2f1fcd',
     instableBaseUrl: process.env.INSTABLE_BASE_URL?.trim() || 'https://instable.arcod.xyz',
+    // Instable overrides — undefined if not set, provider uses built-in defaults
+    instableSearchPath:      process.env.INSTABLE_SEARCH_PATH?.trim(),
+    instableStreamPath:      process.env.INSTABLE_STREAM_PATH?.trim(),
+    instableSource:          process.env.INSTABLE_SOURCE?.trim(),
+    instableSendSource:      (process.env.INSTABLE_SEND_SOURCE ?? '').trim().toLowerCase() === 'true',
+    instableQualityLossless: process.env.INSTABLE_QUALITY_LOSSLESS?.trim(),
+    instableQualityHigh:     process.env.INSTABLE_QUALITY_HIGH?.trim(),
+    instableQualityLow:      process.env.INSTABLE_QUALITY_LOW?.trim(),
+    instableApiToken:        process.env.INSTABLE_API_TOKEN?.trim(),
+    instableUserAgent:       process.env.INSTABLE_USER_AGENT?.trim(),
   };
 }
