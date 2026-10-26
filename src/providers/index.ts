@@ -31,5 +31,5 @@ export function createSourceProvider(config: Config, source: IsolatedSource): Qo
   if (source === 'deezer') return new RemoteAddonProvider(config);
   if (source === 'eljohnzc') return new RemoteAddonProvider(config, config.eljohnzcBaseUrl);
   if (source === 'instable') return new InstableProvider(config);
-  return new LastBabeProvider(config);
+  return new LastBabeProvider();
 }
