@@ -13,31 +13,36 @@ export type IsolatedSource =
   | 'qobuzdl' | 'lastbabe' | 'monochrome'
   | 'deezer' | 'eljohnzc' | 'instable';
 
+function buildFor(config: Config, source: IsolatedSource): QobuzProvider | undefined {
+  if (source === 'eljohnzc') return undefined; // no implementation yet — do not wire it in
+  if (!config.enabledSources.has(source)) return undefined;
+
+  switch (source) {
+    case 'qobuzdl':    return new QobuzDlProvider(config);
+    case 'lastbabe':   return new LastBabeProvider(config);
+    case 'monochrome': return new MonochromeProvider(config);
+    case 'deezer':     return new RemoteAddonProvider(config);
+    case 'instable':   return new InstableProvider(config);
+  }
+}
+
 export function createProvider(config: Config): QobuzProvider {
   if (config.provider === 'qobuzdl') return new QobuzDlProvider(config);
+  if (config.provider === 'http')    return new HttpQobuzProvider(config);
   if (config.provider === 'multi') {
     return createRacingProvider(
-      new QobuzDlProvider(config), 
-      undefined, // LastBabe
-      undefined, // Monochrome
-      undefined, // Deezer
-      undefined, // Eljohnzc
-      new InstableProvider(config) // 🌟 แก้ไขตรงนี้ ลบ ; ออก
+      buildFor(config, 'qobuzdl'),
+      buildFor(config, 'lastbabe'),
+      buildFor(config, 'monochrome'),
+      buildFor(config, 'deezer'),
+      undefined,
+      buildFor(config, 'instable'),
+      config.sourceSearchTimeoutMs,
     );
   }
-  if (config.provider === 'http') return new HttpQobuzProvider(config);
   return new StubQobuzProvider();
 }
 
 export function createSourceProvider(config: Config, source: IsolatedSource): QobuzProvider {
-  if (source === 'deezer')   return new RemoteAddonProvider(config);
-  if (source === 'eljohnzc') return new StubQobuzProvider();
-  if (source === 'instable') return new InstableProvider(config);
-  if (source === 'lastbabe') return new StubQobuzProvider();
-  if (source === 'monochrome') return new MonochromeProvider(config);
-  if (source === 'qobuzdl') return new QobuzDlProvider({
-    ...config,
-    apiBaseUrl: config.apiBaseUrl ?? 'https://qobuz-dll.foreyou.workers.dev',
-  });
-  return new StubQobuzProvider();
+  return buildFor(config, source) ?? new StubQobuzProvider();
 }
