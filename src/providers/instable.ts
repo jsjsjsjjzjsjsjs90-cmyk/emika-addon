@@ -4,98 +4,246 @@ import { UpstreamError } from './http.js';
 
 type RecordValue = Record<string, unknown>;
 
-export class InstableProvider implements QobuzProvider {
-  constructor(private readonly config: Config) {}
+const DEFAULT_BASE_URL    = 'https://instable.arcod.xyz';
+const DEFAULT_SEARCH_PATH = '/api/search';
+const DEFAULT_STREAM_PATH = '/api/player/stream';
+const DEFAULT_SOURCE      = 'qobuz';
 
-  async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
-    const body = await this.request('/api/search', { q: query });
-    const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
-    const items = data && isRecord(data.tracks) && Array.isArray(data.tracks.items) ? data.tracks.items : [];
-    return items.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
+// Never retry — client-fault or permanent
+const STATUS_NO_RETRY = new Set([400, 401, 403, 404, 410, 422]);
+// Retry with backoff
+const STATUS_RETRYABLE = new Set([408, 425, 429]);
+
+export class InstableProvider implements QobuzProvider {
+  private readonly baseUrl: string;
+  private readonly searchPath: string;
+  private readonly streamPath: string;
+  private readonly source: string;
+  private readonly sendSource: boolean;
+  private readonly qualityIds: Record<Quality, string>;
+  private readonly apiToken?: string;
+  private readonly userAgent: string;
+  private readonly timeoutMs: number;
+  private readonly maxAttempts: number;
+
+  constructor(private readonly config: Config) {
+    this.baseUrl     = (config.instableBaseUrl ?? DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
+    this.searchPath  = normalizePath(config.instableSearchPath ?? DEFAULT_SEARCH_PATH);
+    this.streamPath  = normalizePath(config.instableStreamPath ?? DEFAULT_STREAM_PATH);
+    this.source      = (config.instableSource ?? DEFAULT_SOURCE).trim() || DEFAULT_SOURCE;
+    this.sendSource  = config.instableSendSource === true;
+    this.qualityIds  = {
+      LOSSLESS: (config.instableQualityLossless ?? '27').trim() || '27',
+      HIGH:     (config.instableQualityHigh     ?? '6').trim()  || '6',
+      LOW:      (config.instableQualityLow      ?? '5').trim()  || '5',
+    };
+    this.apiToken    = config.instableApiToken?.trim() || undefined;
+    this.userAgent   = config.instableUserAgent?.trim() || defaultUserAgent();
+    this.timeoutMs   = Math.max(config.requestTimeoutMs, 8000);
+    this.maxAttempts = Math.max(config.upstreamRetries, 2);
   }
 
+  // ─── search ────────────────────────────────────────────────────────
+  async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
+    const params: Record<string, string> = { q: query };
+
+    // /api/get-music requires source; /api/search ignores it (harmless)
+    if (this.sendSource || this.searchPath.includes('get-music')) {
+      params.source = this.source;
+      if (this.searchPath.includes('get-music')) params.offset = '0';
+    }
+    if (this.searchPath.includes('/search') && !this.searchPath.includes('get-music')) {
+      params.limit = '10';
+    }
+
+    const body = await this.request(this.searchPath, params);
+    const items = extractTrackItems(body);
+    return items.filter(isRecord).map(toTrack).filter((t): t is QobuzTrack => t !== null);
+  }
+
+  // ─── stream ────────────────────────────────────────────────────────
   async getStream(trackId: string, quality: Quality, _atmos: string): Promise<QobuzStream | null> {
+    const path = `${this.streamPath}/${encodeURIComponent(trackId)}`;
+    const params: Record<string, string> = { quality: this.qualityIds[quality] };
+
     try {
-      const body = await this.request(`/api/player/stream/${encodeURIComponent(trackId)}`, { quality: qualityId(quality) });
-      if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
-      return {
-        url: body.url,
-        format: mimeFormat(body.mimeType),
-        quality: typeof body.quality === 'number' ? String(body.quality) : quality,
-        manifest: 'none',
-        encrypted: false,
-      };
+      const body = await this.request(path, params);
+      return toStream(body, quality);
     } catch (error) {
-      return null; // Fail gracefully, don't crash the server
+      // 410 = URL expired, 404 = track gone, 401/403 = auth, 400 = bad params
+      // → return null so BitChord can trigger a fresh search
+      if (error instanceof UpstreamError && STATUS_NO_RETRY.has(error.status)) return null;
+      // Server / network failures bubble up so BitChord knows provider is sick
+      throw error;
     }
   }
 
+  // ─── HTTP helper ──────────────────────────────────────────────────
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
-    const base = this.config.instableBaseUrl ?? 'https://instable.arcod.xyz';
-    const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
-    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    
+    const url = new URL(path, `${this.baseUrl}/`);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
     let lastError: unknown;
-    const maxAttempts = Math.max(this.config.upstreamRetries, 2);
-    
-    for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
+
+    for (let attempt = 0; attempt <= this.maxAttempts; attempt += 1) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), Math.max(this.config.requestTimeoutMs, 15000));
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
       try {
-        const response = await fetch(url, {
-          headers: {
-            accept: 'application/json',
-            'accept-language': 'en-US,en;q=0.9',
-            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
-            referer: `${base.replace(/\/$/, '')}/`,
-            origin: base.replace(/\/$/, ''),
-          },
-          signal: controller.signal,
-        });
+        const headers: Record<string, string> = {
+          accept: 'application/json',
+          'accept-language': 'en-US,en;q=0.9,th;q=0.8',
+          'user-agent': this.userAgent,
+          referer: `${this.baseUrl}/`,
+          origin: this.baseUrl,
+        };
+        if (this.apiToken) headers.authorization = `Bearer ${this.apiToken}`;
+
+        const response = await fetch(url, { headers, signal: controller.signal });
+
+        // instable returns text/plain content-type but valid JSON — parse defensively
         let body: unknown;
-        try { body = await response.json(); } catch { throw new UpstreamError(502, 'Instable returned invalid JSON'); }
-        
+        try { body = await response.json(); }
+        catch { throw new UpstreamError(502, 'Instable returned invalid JSON'); }
+
         if (!response.ok) {
-          const error = new UpstreamError(retryable(response.status) ? 502 : response.status === 404 ? 404 : 400, 'Instable request failed');
-          if (!retryable(response.status) || attempt >= maxAttempts) throw error;
-          lastError = error;
-        } else if (isRecord(body) && body.success === false) {
-          throw new UpstreamError(502, 'Instable request failed');
-        } else return body;
-        
+          if (response.status === 404) throw new UpstreamError(404, 'Instable track not found');
+          if (response.status === 410) throw new UpstreamError(410, 'Instable stream gone (expired URL)');
+          if (response.status === 401 || response.status === 403) throw new UpstreamError(401, 'Instable auth required');
+          if (response.status === 400) throw new UpstreamError(400, 'Instable bad request');
+
+          if (!isRetryable(response.status) || attempt >= this.maxAttempts) {
+            throw new UpstreamError(502, `Instable request failed (HTTP ${response.status})`);
+          }
+          lastError = new UpstreamError(502, `Instable request failed (HTTP ${response.status})`);
+        }
+        else if (isRecord(body) && body.success === false) {
+          const msg = typeof body.error === 'string' ? body.error : 'Instable request failed';
+          if (/auth/i.test(msg)) throw new UpstreamError(401, 'Instable auth required');
+          if (attempt >= this.maxAttempts) throw new UpstreamError(502, msg);
+          lastError = new UpstreamError(502, msg);
+        }
+        else {
+          return body;
+        }
       } catch (error) {
         if (error instanceof UpstreamError) {
-          if (error.status !== 502 || attempt >= maxAttempts) throw error;
+          if (!isRetryable(error.status) || attempt >= this.maxAttempts) throw error;
           lastError = error;
-        } else lastError = error;
-      } finally { clearTimeout(timeout); }
-      await delay(200 * 2 ** attempt);
+        } else {
+          lastError = error;
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+
+      // exponential backoff + jitter
+      await delay(250 * 2 ** attempt + Math.floor(Math.random() * 200));
     }
-    throw lastError instanceof UpstreamError ? lastError : new UpstreamError(502, 'Instable request failed');
+
+    throw lastError instanceof UpstreamError
+      ? lastError
+      : new UpstreamError(502, 'Instable request failed');
   }
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────
+
+function extractTrackItems(body: unknown): unknown[] {
+  if (!isRecord(body)) return [];
+  const data = isRecord(body.data) ? body.data : body;
+
+  // {data:{tracks:{items:[...]}}} — canonical /api/search shape
+  if (isRecord(data.tracks) && Array.isArray(data.tracks.items)) return data.tracks.items;
+  // {data:{tracks:[...]}}
+  if (Array.isArray(data.tracks)) return data.tracks;
+  // {tracks:{items:[...]}}
+  if (isRecord(body.tracks) && Array.isArray(body.tracks.items)) return body.tracks.items;
+  // {tracks:[...]} or [...]
+  if (Array.isArray(body.tracks)) return body.tracks;
+  if (Array.isArray(body)) return body;
+  return [];
 }
 
 function toTrack(raw: RecordValue): QobuzTrack | null {
   const id = raw.id;
-  const title = raw.title;
-  if ((typeof id !== 'number' && typeof id !== 'string') || typeof title !== 'string' || !title.trim()) return null;
+  const rawTitle = raw.title;
+  if ((typeof id !== 'number' && typeof id !== 'string') || typeof rawTitle !== 'string' || !rawTitle.trim()) {
+    return null;
+  }
+
+  const version = typeof raw.version === 'string' && raw.version.trim() ? raw.version.trim() : undefined;
+  const title = version ? `${rawTitle.trim()} (${version})` : rawTitle.trim();
+
   const performer = isRecord(raw.performer) ? raw.performer : undefined;
-  const album = isRecord(raw.album) ? raw.album : undefined;
-  const image = album && isRecord(album.image) ? album.image : undefined;
+  const album     = isRecord(raw.album)     ? raw.album     : undefined;
+  const image     = album && isRecord(album.image) ? album.image : undefined;
+
+  const bitDepth = typeof raw.maximum_bit_depth === 'number' ? raw.maximum_bit_depth : undefined;
+  const hires    = raw.hires === true;
+
+  let audioQuality: string | undefined;
+  if (hires) audioQuality = 'HI_RES_LOSSLESS';
+  else if (bitDepth !== undefined && bitDepth >= 16) audioQuality = 'LOSSLESS';
+
   return {
     upstreamId: String(id),
-    title: title.trim(),
-    artist: performer && typeof performer.name === 'string' ? performer.name : undefined,
-    album: album && typeof album.title === 'string' ? album.title : undefined,
-    duration: typeof raw.duration === 'number' ? raw.duration : undefined,
+    title,
+    artist:     performer && typeof performer.name === 'string' ? performer.name : undefined,
+    album:      album && typeof album.title === 'string' ? album.title : undefined,
+    duration:   typeof raw.duration === 'number' ? raw.duration : undefined,
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
-    format: typeof raw.maximum_bit_depth === 'number' ? 'flac' : undefined,
-    audioQuality: typeof raw.maximum_bit_depth === 'number' ? 'LOSSLESS' : undefined,
+    format:     bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
+    audioQuality,
   };
 }
 
-function qualityId(quality: Quality): string { return quality === 'LOSSLESS' ? '27' : '5'; }
-function mimeFormat(value: unknown): string | undefined { return typeof value === 'string' ? value.split('/').pop() : undefined; }
-function isRecord(value: unknown): value is RecordValue { return typeof value === 'object' && value !== null; }
-function retryable(status: number): boolean { return status === 408 || status === 425 || status === 429 || status >= 500; }
-function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
+function toStream(body: unknown, requested: Quality): QobuzStream {
+  if (!isRecord(body)) throw new UpstreamError(502, 'Instable stream response malformed');
+  const data = isRecord(body.data) ? body.data : body;
+
+  const url =
+    (typeof data.url === 'string' && data.url) ||
+    (isRecord(data.stream) && typeof data.stream.url === 'string' && data.stream.url) ||
+    undefined;
+
+  if (!url || !/^https:\/\//i.test(url)) {
+    throw new UpstreamError(502, 'Instable stream missing playable url');
+  }
+
+  const mime =
+    (typeof data.mimeType === 'string' && data.mimeType) ||
+    (typeof data.format   === 'string' && data.format)   ||
+    undefined;
+  const format = mime && mime.includes('/') ? mime.split('/').pop() : mime;
+
+  return {
+    url,
+    format: format?.toLowerCase(),
+    quality: requested,
+    manifest: 'none',
+    encrypted: false,
+  };
+}
+
+function normalizePath(p: string): string {
+  const trimmed = p.trim();
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+function defaultUserAgent(): string {
+  return 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 ' +
+         '(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
+}
+
+function isRetryable(status: number): boolean {
+  return STATUS_RETRYABLE.has(status) || status >= 500;
+}
+
+function isRecord(v: unknown): v is RecordValue {
+  return typeof v === 'object' && v !== null;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
