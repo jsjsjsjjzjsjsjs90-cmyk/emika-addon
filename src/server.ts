@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import { loadConfig, type Config } from './config.js';
+import { loadConfig } from './config.js';
 import { homePage } from './home.js';
 import { TtlCache } from './cache.js';
 import { AppError, badRequest, notFound } from './errors.js';
@@ -11,47 +11,45 @@ const config = loadConfig();
 const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] } });
 
 const manifests = {
-  root: { id: 'com.bitchord.qobuz', name: 'Emika addon', version: '1.0.0' },
-  qobuzdl: { id: 'com.bitchord.qobuz.qobuzdl', name: 'Qobuz-DL', version: '1.0.0' },
-  lastbabe: { id: 'com.bitchord.qobuz.lastbabe', name: 'LastBabe', version: '1.0.0' },
-  monochrome: { id: 'com.bitchord.qobuz.monochrome', name: 'Monochrome Lossless', version: '1.0.0' },
-  deezer: { id: 'com.bitchord.qobuz.deezer', name: 'Deezer Fallback', version: '1.0.0' },
-  eljohnzc: { id: 'com.bitchord.qobuz.eljohnzc', name: 'Eljohnzc Lossless', version: '1.0.0' },
-  instable: { id: 'com.bitchord.qobuz.instable', name: 'Instable Lossless', version: '1.0.0' },
+  root:       { id: 'com.bitchord.qobuz',            name: 'Emika addon',              version: '1.0.0' },
+  qobuzdl:    { id: 'com.bitchord.qobuz.qobuzdl',    name: 'Qobuz-DL',                 version: '1.0.0' },
+  lastbabe:   { id: 'com.bitchord.qobuz.lastbabe',   name: 'LastBabe',                 version: '1.0.0' },
+  monochrome: { id: 'com.bitchord.qobuz.monochrome', name: 'Monochrome Lossless',      version: '1.0.0' },
+  deezer:     { id: 'com.bitchord.qobuz.deezer',     name: 'Deezer Fallback',          version: '1.0.0' },
+  eljohnzc:   { id: 'com.bitchord.qobuz.eljohnzc',   name: 'Eljohnzc Lossless',        version: '1.0.0' },
+  instable:   { id: 'com.bitchord.qobuz.instable',   name: 'Instable Lossless',        version: '1.0.0' },
+  gdstudio:   { id: 'com.bitchord.qobuz.gdstudio',   name: 'Qobuz + Tidal (gdstudio)', version: '1.0.0' },
 } as const;
 
-// 🌟 1. เพิ่ม Route หน้าเว็บหลัก (ตัวที่หายไป)
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
-
-// 🌟 2. เพิ่ม Route เช็คสถานะเซิร์ฟเวอร์
 app.get('/health', async () => ({ ok: true }));
 
-// 3. Route สำหรับเช็คสถานะ Source ทั้ง 6 เจ้า
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
-  const testQuery = request.query.q || 'love'; 
-  const sourceNames: IsolatedSource[] = ['qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable'];
+  const testQuery = request.query.q || 'love';
+  const sourceNames: IsolatedSource[] = [
+    'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable', 'gdstudio',
+  ];
 
   const results = await Promise.all(
     sourceNames.map(async (sourceName) => {
+      if (sourceName === 'eljohnzc') {
+        return { source: sourceName, status: 'disabled' as const, latencyMs: 0, resultCount: 0 };
+      }
       const provider = createSourceProvider(config, sourceName);
       const startTime = Date.now();
-      
+      let timer: NodeJS.Timeout | undefined;
       try {
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 8000)
-        );
-
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Timeout')), 8000);
+        });
         const tracks = await Promise.race([
           provider.search(testQuery, 'LOSSLESS', 'auto'),
-          timeoutPromise
+          timeoutPromise,
         ]);
-
-        const latency = Date.now() - startTime;
-
         return {
           source: sourceName,
           status: tracks.length > 0 ? 'healthy' : 'empty',
-          latencyMs: latency,
+          latencyMs: Date.now() - startTime,
           resultCount: tracks.length,
         };
       } catch (error: any) {
@@ -61,34 +59,46 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
           latencyMs: Date.now() - startTime,
           error: error.message || 'Unknown error',
         };
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     })
   );
 
-  const overallStatus = results.every(r => r.status === 'healthy' || r.status === 'empty') ? 'all_systems_operational' : 'partial_outage';
+  const healthyCount = results.filter(r => r.status === 'healthy' || r.status === 'empty').length;
+  const activeCount  = results.filter(r => r.status !== 'disabled').length;
+
+  let overallStatus = 'outage';
+  if (activeCount > 0 && healthyCount === activeCount) overallStatus = 'all_systems_operational';
+  else if (healthyCount >= Math.ceil(activeCount / 2)) overallStatus = 'operational_with_minor_outages';
+  else if (healthyCount >= 1) overallStatus = 'degraded_but_functional';
 
   return {
     timestamp: new Date().toISOString(),
     testQuery,
     overallStatus,
+    healthySources: healthyCount,
+    activeSources: activeCount,
+    totalSources: results.length,
     providers: results,
   };
 });
 
-registerAddon('', createProvider(config), manifests.root);
-registerAddon('/a', createSourceProvider(config, 'qobuzdl'), manifests.qobuzdl);
-registerAddon('/b', createSourceProvider(config, 'lastbabe'), manifests.lastbabe);
+registerAddon('',   createProvider(config),                    manifests.root);
+registerAddon('/a', createSourceProvider(config, 'qobuzdl'),   manifests.qobuzdl);
+registerAddon('/b', createSourceProvider(config, 'lastbabe'),  manifests.lastbabe);
 registerAddon('/c', createSourceProvider(config, 'monochrome'), manifests.monochrome);
-registerAddon('/d', createSourceProvider(config, 'deezer'), manifests.deezer);
-registerAddon('/e', createSourceProvider(config, 'eljohnzc'), manifests.eljohnzc);
-registerAddon('/f', createSourceProvider(config, 'instable'), manifests.instable);
+registerAddon('/d', createSourceProvider(config, 'deezer'),    manifests.deezer);
+registerAddon('/e', createSourceProvider(config, 'eljohnzc'),  manifests.eljohnzc);
+registerAddon('/f', createSourceProvider(config, 'instable'),  manifests.instable);
+registerAddon('/g', createSourceProvider(config, 'gdstudio'),  manifests.gdstudio);
 
 function registerAddon(prefix: string, provider: QobuzProvider, manifest: { id: string; name: string; version: string }): void {
   const searchCache = new TtlCache<PublicTrack[]>(config.cacheTtlMs);
   const route = (path: string): string => `${prefix}${path}` || '/';
 
   app.get(route('/manifest.json'), async (_request, reply) => reply.header('Cache-Control', 'public, max-age=3600, s-maxage=86400').send({
-    ...manifest, resources: ['search', 'stream'], allowDownloads: 0, "checkValidLossless": 0,
+    ...manifest, resources: ['search', 'stream'], allowDownloads: 0, checkValidLossless: 0,
     settings: [{ key: 'quality', type: 'select', default: 'lossless', options: [
       { label: 'Lossless', value: 'lossless' }, { label: 'High', value: 'high' }, { label: 'Low', value: 'low' },
     ] }],
@@ -141,14 +151,11 @@ function parseQuality(value?: string): Quality {
   throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
 }
 
-// ... โค้ดด้านบนทั้งหมด ...
-
 if (process.env.VERCEL !== '1') {
   app.listen({ host: config.host, port: config.port }).then(() => {
     app.log.info({ host: config.host, port: config.port, provider: config.provider }, 'BitChord addon listening');
   }).catch(error => { app.log.error(error); process.exit(1); });
 }
 
-// 🌟 เพิ่มบรรทัดนี้เข้าไป
-export default app; 
+export default app;
 export { app, parseQuality };

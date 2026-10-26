@@ -8,17 +8,24 @@ import { createRacingProvider } from './racing.js';
 import { MonochromeProvider } from './monochrome.js';
 import { RemoteAddonProvider } from './remote-addon.js';
 import { InstableProvider } from './instable.js';
+import { GdstudioProvider } from './gdstudio.js';
 
-export type IsolatedSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'eljohnzc' | 'instable';
+export type IsolatedSource =
+  | 'qobuzdl' | 'lastbabe' | 'monochrome'
+  | 'deezer' | 'eljohnzc' | 'instable'
+  | 'gdstudio';
 
 export function createProvider(config: Config): QobuzProvider {
   if (config.provider === 'qobuzdl') return new QobuzDlProvider(config);
   if (config.provider === 'multi') {
     return createRacingProvider(
-      new QobuzDlProvider(config), new LastBabeProvider(config),
-      new MonochromeProvider(config), new RemoteAddonProvider(config),
-      new RemoteAddonProvider(config, config.eljohnzcBaseUrl),
+      new QobuzDlProvider(config),
+      undefined,
+      new MonochromeProvider(config),
+      undefined,
+      undefined,
       new InstableProvider(config),
+      new GdstudioProvider(config),
     );
   }
   if (config.provider === 'http') return new HttpQobuzProvider(config);
@@ -26,10 +33,16 @@ export function createProvider(config: Config): QobuzProvider {
 }
 
 export function createSourceProvider(config: Config, source: IsolatedSource): QobuzProvider {
-  if (source === 'qobuzdl') return new QobuzDlProvider({ ...config, apiBaseUrl: config.apiBaseUrl ?? 'https://qobuz-dll.foreyou.workers.dev' });
-  if (source === 'monochrome') return new MonochromeProvider(config);
-  if (source === 'deezer') return new RemoteAddonProvider(config);
-  if (source === 'eljohnzc') return new RemoteAddonProvider(config, config.eljohnzcBaseUrl);
+  if (source === 'deezer')   return new RemoteAddonProvider(config);
+  if (source === 'gdstudio') return new GdstudioProvider(config);
+
+  if (source === 'eljohnzc') return new StubQobuzProvider();
   if (source === 'instable') return new InstableProvider(config);
-  return new LastBabeProvider(config);
+  if (source === 'lastbabe') return new LastBabeProvider(config);
+  if (source === 'monochrome') return new MonochromeProvider(config);
+  if (source === 'qobuzdl') return new QobuzDlProvider({
+    ...config,
+    apiBaseUrl: config.apiBaseUrl ?? 'https://qobuz-dll.foreyou.workers.dev',
+  });
+  return new StubQobuzProvider();
 }
