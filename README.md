@@ -252,3 +252,5 @@ getStream must return a URL that passes streamResponse(): https:// only, encrypt
 License
 
 No license file included. Add one if you intend to share this. Upstream services are third-party and not affiliated with this addon; they can change or shut down at any time. QOBUZ_ENABLED_SOURCES is the kill switch — if an upstream dies, drop it from the list and redeploy.
+
+```
