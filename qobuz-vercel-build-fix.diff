@@ -1,0 +1,44 @@
+diff --git a/package.json b/package.json
+index 68a69a6..aa08077 100644
+--- a/package.json
++++ b/package.json
+@@ -9,7 +9,7 @@
+     "node": ">=22 <27"
+   },
+   "scripts": {
+-    "build": "tsc -p tsconfig.json",
++    "build": "tsc -p tsconfig.json --noEmitOnError",
+     "start": "node dist/server.js",
+     "dev": "tsx watch src/server.ts",
+     "test": "tsx --test test/**/*.test.ts"
+diff --git a/tsconfig.json b/tsconfig.json
+index 79d3ea1..9658096 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -6,7 +6,6 @@
+     "outDir": "dist",
+     "rootDir": "src",
+     "strict": true,
+-    "noEmitOnError": true,
+     "esModuleInterop": true,
+     "forceConsistentCasingInFileNames": true,
+     "skipLibCheck": true,
+diff --git a/vercel.json b/vercel.json
+index a5dfdae..b14b623 100644
+--- a/vercel.json
++++ b/vercel.json
+@@ -1,9 +1,9 @@
+ {
+   "version": 2,
+-  "builds": [
+-    { "src": "api/index.ts", "use": "@vercel/node" }
+-  ],
+-  "routes": [
+-    { "src": "/(.*)", "dest": "/api/index.ts" }
++  "functions": {
++    "api/index.ts": { "maxDuration": 10 }
++  },
++  "rewrites": [
++    { "source": "/(.*)", "destination": "/api/$1" }
+   ]
+ }
