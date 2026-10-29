@@ -40,7 +40,8 @@ const manifests = {
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
 app.get('/health', async () => ({ ok: true }));
 
-const STUB_SOURCES: ReadonlySet<IsolatedSource> = new Set<IsolatedSource>(['eljohnzc']);
+// ★ แก้จุดที่ 1: STUB_SOURCES ว่างเปล่า — ไม่มี eljohnzc อีกต่อไป
+const STUB_SOURCES: ReadonlySet<IsolatedSource> = new Set<IsolatedSource>([]);
 
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   const testQuery = request.query.q || 'love';
@@ -53,7 +54,8 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
       if (STUB_SOURCES.has(sourceName)) {
         return { source: sourceName, status: 'not_implemented' as const, latencyMs: 0, resultCount: 0 };
       }
-      if (!config.enabledSources.has(sourceName as Exclude<IsolatedSource, 'eljohnzc'>)) {
+      // ★ แก้จุดที่ 2: ลบ Exclude<IsolatedSource, 'eljohnzc'> ออก
+      if (!config.enabledSources.has(sourceName)) {
         return { source: sourceName, status: 'disabled_by_config' as const, latencyMs: 0, resultCount: 0 };
       }
       const provider = createSourceProvider(config, sourceName);
@@ -228,6 +230,30 @@ function parseQuality(value?: string): Quality {
 }
 function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
   const normalized = (value ?? 'auto').toLowerCase();
+  if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
+  throw badRequest('atmos must be auto, on, or off');
+}
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('operation timed out')), timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+if (process.env.VERCEL !== '1') {
+  app
+    .listen({ host: config.host, port: config.port })
+    .then(() => {
+      app.log.info({ host: config.host, port: config.port, provider: config.provider }, 'BitChord addon listening');
+    })
+    .catch((error) => {
+      app.log.error(error);
+      process.exit(1);
+    });
+}
+
+export default app;
+export { app, parseQuality };ormalized = (value ?? 'auto').toLowerCase();
   if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
   throw badRequest('atmos must be auto, on, or off');
 }
