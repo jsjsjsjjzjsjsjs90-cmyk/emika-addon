@@ -9,7 +9,7 @@
     "node": ">=22 <27"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json --noEmitOnError",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "tsx --test test/**/*.test.ts"
