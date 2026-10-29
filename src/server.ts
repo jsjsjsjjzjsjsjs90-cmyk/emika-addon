@@ -252,6 +252,31 @@ if (process.env.VERCEL !== '1') {
 
 export default app;
 export { app, parseQuality };
+ormalized = (value ?? 'auto').toLowerCase();
+  if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
+  throw badRequest('atmos must be auto, on, or off');
+}
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('operation timed out')), timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+if (process.env.VERCEL !== '1') {
+  app
+    .listen({ host: config.host, port: config.port })
+    .then(() => {
+      app.log.info({ host: config.host, port: config.port, provider: config.provider }, 'BitChord addon listening');
+    })
+    .catch((error) => {
+      app.log.error(error);
+      process.exit(1);
+    });
+}
+
+export default app;
+export { app, parseQuality };
  (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
   throw badRequest('atmos must be auto, on, or off');
 }
