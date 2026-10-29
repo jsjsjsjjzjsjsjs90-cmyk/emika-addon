@@ -1,0 +1,735 @@
+diff --git a/.env.example b/.env.example
+index 0f463f6..2ddc908 100644
+--- a/.env.example
++++ b/.env.example
+@@ -25,8 +25,13 @@ SOURCE_SEARCH_TIMEOUT_MS=3000
+ # TUNING — leave at defaults unless you have a reason.
+ # ═══════════════════════════════════════════════════════════════════
+ REQUEST_TIMEOUT_MS=6000          # whole HTTP request ceiling
++SERVER_REQUEST_TIMEOUT_MS=10000  # hard deadline for each public route
+ UPSTREAM_RETRIES=1               # retry count for retryable upstream 5xx
+ CACHE_TTL_SECONDS=300            # how long search results are cached
++RATE_LIMIT_WINDOW_MS=60000       # rate-limit window per client
++RATE_LIMIT_MAX_REQUESTS=60       # search/stream/health requests per window
++RATE_LIMIT_MAX_KEYS=10000        # maximum client buckets kept in memory
++MAX_QUERY_LENGTH=200              # maximum search query length
+ 
+ 
+ # ═══════════════════════════════════════════════════════════════════
+diff --git a/README.md b/README.md
+index 8b16715..26599ad 100644
+--- a/README.md
++++ b/README.md
+@@ -1,9 +1,8 @@
+-```markdown
+ # Emika Addon
+ 
+ A playback-only [BitChord](https://bitcord.app) addon. Exposes a `manifest.json`, a `/search` endpoint, and a `/stream/:id` endpoint that returns a directly playable HTTPS rendition. No downloads, no accounts, no persistent storage.
+ 
+-TypeScript · Node 20+ · Vercel Serverless or any Node host.
++TypeScript · Node 22–26 · Vercel Serverless or any Node host.
+ 
+ ---
+ 
+@@ -131,9 +130,14 @@ SOURCE_SEARCH_TIMEOUT_MS 3000 Per-source race timeout (ms)
+ Optional
+ 
+ Name Default Purpose
+-REQUEST_TIMEOUT_MS 6000 Whole-request ceiling
++REQUEST_TIMEOUT_MS 6000 Upstream request timeout
+ UPSTREAM_RETRIES 1 Retries on retryable upstream 5xx
+ CACHE_TTL_SECONDS 300 Search cache TTL
++SERVER_REQUEST_TIMEOUT_MS 10000 Public route deadline
++RATE_LIMIT_WINDOW_MS 60000 Rate-limit window
++RATE_LIMIT_MAX_REQUESTS 60 Requests per client/window
++RATE_LIMIT_MAX_KEYS 10000 Maximum in-memory client buckets
++MAX_QUERY_LENGTH 200 Maximum search query length
+ QOBUZ_PROVIDER multi multi \| qobuzdl \| http \| stub
+ 
+ Per-source URLs
+@@ -251,6 +255,4 @@ getStream must return a URL that passes streamResponse(): https:// only, encrypt
+ 
+ License
+ 
+-No license file included. Add one if you intend to share this. Upstream services are third-party and not affiliated with this addon; they can change or shut down at any time. QOBUZ_ENABLED_SOURCES is the kill switch — if an upstream dies, drop it from the list and redeploy.
+-
+-```
++Licensed under the GNU General Public License v3. Upstream services are third-party and not affiliated with this addon; they can change or shut down at any time. QOBUZ_ENABLED_SOURCES is the kill switch — if an upstream dies, drop it from the list and redeploy.
+diff --git a/api/index.ts b/api/index.ts
+index 957bb1f..f70de8c 100644
+--- a/api/index.ts
++++ b/api/index.ts
+@@ -5,26 +5,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
+   try {
+     await app.ready();
+ 
+-    // ดักจับ Path ที่ Vercel ส่งมา
+-    if (req.url === '/api' || req.url === '/api/' || req.url === '/api/index.ts' || req.url === '/index') {
+-      req.url = '/';
+-    }
++    req.url = normalizeVercelPath(req.url);
+ 
+     await new Promise<void>((resolve, reject) => {
+       res.on('finish', resolve);
+       res.on('error', reject);
+       app.server.emit('request', req, res);
+     });
+-  } catch (error: any) {
+-    console.error('FATAL FUNCTION ERROR:', error);
++  } catch (error: unknown) {
++    console.error('FATAL FUNCTION ERROR:', error instanceof Error ? error.message : 'unknown error');
+     if (!res.headersSent) {
+       res.statusCode = 500;
+       res.setHeader('content-type', 'application/json');
+-      res.end(JSON.stringify({ 
+-        error: 'Function crashed', 
+-        message: error.message || String(error),
+-        stack: error.stack 
+-      }));
++      res.end(JSON.stringify({ error: 'internal server error' }));
+     }
+   }
+ }
++
++function normalizeVercelPath(url: string | undefined): string {
++  const value = url || '/';
++  if (value === '/api' || value === '/api/' || value === '/api/index.ts' || value === '/index') return '/';
++  if (value.startsWith('/api/')) return value.slice('/api'.length) || '/';
++  return value;
++}
+diff --git a/manifest.json b/manifest.json
+index 1b2aa7f..9be0ff4 100644
+--- a/manifest.json
++++ b/manifest.json
+@@ -1,6 +1,6 @@
+ {
+   "id": "com.bitchord.qobuz",
+-  "name": "emika addon",
++  "name": "Emika addon",
+   "version": "1.0.0",
+   "resources": ["search", "stream"],
+   "allowDownloads": 0,
+diff --git a/package-lock.json b/package-lock.json
+index 72dad53..096c10b 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -7,8 +7,9 @@
+     "": {
+       "name": "qobuz-bitchord-addon",
+       "version": "1.0.0",
++      "license": "GPL-3.0-only",
+       "dependencies": {
+-        "fastify": "^5.0.0"
++        "fastify": "^5.12.7"
+       },
+       "devDependencies": {
+         "@types/node": "^22.0.0",
+@@ -16,7 +17,7 @@
+         "typescript": "^5.6.0"
+       },
+       "engines": {
+-        "node": "24.x"
++        "node": ">=22 <27"
+       }
+     },
+     "node_modules/@esbuild/aix-ppc64": {
+@@ -628,9 +629,9 @@
+       }
+     },
+     "node_modules/ajv/node_modules/fast-uri": {
+-      "version": "3.1.8",
+-      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz",
+-      "integrity": "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==",
++      "version": "3.1.9",
++      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.9.tgz",
++      "integrity": "sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==",
+       "funding": [
+         {
+           "type": "github",
+@@ -782,9 +783,9 @@
+       }
+     },
+     "node_modules/fast-uri": {
+-      "version": "4.2.1",
+-      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-4.2.1.tgz",
+-      "integrity": "sha512-TmHQgewjHtMq1E5QKA0tOE0yeYGQs25KZC/ziJpubRtWI15W92e6vPFydWOeZBVROSHBYw/QhD9d5OefdD6LDg==",
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-4.2.3.tgz",
++      "integrity": "sha512-I1PXwP5eAhlNlcdpjt9CgB59op2ZvZfxw+BkqGFVIUOgNpCVTcTqp3HhTX7brxj5vsip+nSY4nTvff+eIA76hg==",
+       "funding": [
+         {
+           "type": "github",
+@@ -798,9 +799,9 @@
+       "license": "BSD-3-Clause"
+     },
+     "node_modules/fastify": {
+-      "version": "5.12.5",
+-      "resolved": "https://registry.npmjs.org/fastify/-/fastify-5.12.5.tgz",
+-      "integrity": "sha512-OB2k1dlxs5/NAABqeKV2FUHkSD2BbENsCak8yULVcymn3fHIPDVa9TI3SDnJSWYSllZmSYuZXy2gTnsT+Sut1A==",
++      "version": "5.12.7",
++      "resolved": "https://registry.npmjs.org/fastify/-/fastify-5.12.7.tgz",
++      "integrity": "sha512-v4pEPsTRPuqlDIYiQFB+BHjVN4SdHX9u0ABk0ZDUKbbdY1vsNryUd1j4Z+jQEZajvYIVk047Kimva9/AJ79GYw==",
+       "funding": [
+         {
+           "type": "github",
+diff --git a/package.json b/package.json
+index 09505e2..68a69a6 100644
+--- a/package.json
++++ b/package.json
+@@ -2,16 +2,21 @@
+   "name": "qobuz-bitchord-addon",
+   "version": "1.0.0",
+   "private": true,
++  "license": "GPL-3.0-only",
+   "description": "Playback-only BitChord addon with a replaceable authorized Qobuz provider.",
+   "type": "module",
+-  "engines": { "node": "24.x" },
++  "engines": {
++    "node": ">=22 <27"
++  },
+   "scripts": {
+     "build": "tsc -p tsconfig.json",
+-    "start": "npm install --omit=dev --no-audit --no-fund && node dist/server.js",
++    "start": "node dist/server.js",
+     "dev": "tsx watch src/server.ts",
+     "test": "tsx --test test/**/*.test.ts"
+   },
+-  "dependencies": { "fastify": "^5.0.0" },
++  "dependencies": {
++    "fastify": "^5.12.7"
++  },
+   "devDependencies": {
+     "@types/node": "^22.0.0",
+     "tsx": "^4.19.0",
+diff --git a/src/cache.ts b/src/cache.ts
+index 93b67d8..ca49db1 100644
+--- a/src/cache.ts
++++ b/src/cache.ts
+@@ -1,5 +1,6 @@
+ export class TtlCache<V> {
+   private readonly values = new Map<string, { value: V; expiresAt: number }>();
++  private readonly inflight = new Map<string, Promise<V>>();
+   constructor(private readonly ttlMs: number, private readonly maxEntries = 100) {}
+   get(key: string): V | undefined {
+     const hit = this.values.get(key);
+@@ -10,7 +11,22 @@ export class TtlCache<V> {
+   getStale(key: string): V | undefined {
+     return this.values.get(key)?.value;
+   }
++  async getOrLoad(key: string, loader: () => Promise<V>): Promise<V> {
++    const cached = this.get(key);
++    if (cached !== undefined) return cached;
++    const existing = this.inflight.get(key);
++    if (existing) return existing;
++    const pending = loader().then((value) => {
++      this.set(key, value);
++      return value;
++    }).finally(() => this.inflight.delete(key));
++    this.inflight.set(key, pending);
++    return pending;
++  }
+   set(key: string, value: V): void {
++    for (const [entryKey, entry] of this.values) {
++      if (entry.expiresAt <= Date.now()) this.values.delete(entryKey);
++    }
+     if (this.values.size >= this.maxEntries && !this.values.has(key)) this.values.delete(this.values.keys().next().value as string);
+     this.values.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+   }
+diff --git a/src/config.ts b/src/config.ts
+index f2b2524..6c78900 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -7,6 +7,7 @@ export interface Config {
+   host: string;
+   port: number;
+   requestTimeoutMs: number;
++  serverRequestTimeoutMs: number;
+   upstreamRetries: number;
+   cacheTtlMs: number;
+   idSecret: string;
+@@ -31,6 +32,10 @@ export interface Config {
+   instableUserAgent?: string;
+   enabledSources: Set<KnownSource>;
+   sourceSearchTimeoutMs: number;
++  rateLimitWindowMs: number;
++  rateLimitMaxRequests: number;
++  rateLimitMaxKeys: number;
++  maxQueryLength: number;
+ }
+ 
+ const DEV_ID_SECRET = 'qobuz-bitchord-id-secret-dev-only';
+@@ -65,7 +70,8 @@ export function loadConfig(): Config {
+     'https://qobuz-dll.foreyou.workers.dev';
+ 
+   const secretEnv = process.env.QOBUZ_ID_SECRET?.trim();
+-  if (!secretEnv && process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'development') {
++  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
++  if (!secretEnv && isProduction) {
+     throw new Error('QOBUZ_ID_SECRET is required in production');
+   }
+ 
+@@ -73,6 +79,7 @@ export function loadConfig(): Config {
+     host: process.env.HOST ?? '0.0.0.0',
+     port: positiveInt('PORT', Number(process.env.SERVER_PORT) || 3000),
+     requestTimeoutMs: positiveInt('REQUEST_TIMEOUT_MS', 6000),
++    serverRequestTimeoutMs: positiveInt('SERVER_REQUEST_TIMEOUT_MS', 10_000),
+     upstreamRetries: positiveInt('UPSTREAM_RETRIES', 1),
+     cacheTtlMs: positiveInt('CACHE_TTL_SECONDS', 300) * 1000,
+     idSecret: secretEnv || DEV_ID_SECRET,
+@@ -99,5 +106,9 @@ export function loadConfig(): Config {
+     instableUserAgent: process.env.INSTABLE_USER_AGENT?.trim(),
+     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),
+     sourceSearchTimeoutMs: positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 3000),
++    rateLimitWindowMs: positiveInt('RATE_LIMIT_WINDOW_MS', 60_000),
++    rateLimitMaxRequests: positiveInt('RATE_LIMIT_MAX_REQUESTS', 60),
++    rateLimitMaxKeys: positiveInt('RATE_LIMIT_MAX_KEYS', 10_000),
++    maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
+   };
+ }
+diff --git a/src/normalize.ts b/src/normalize.ts
+index fe3f40b..d74d841 100644
+--- a/src/normalize.ts
++++ b/src/normalize.ts
+@@ -3,13 +3,14 @@ import type { PublicTrack, QobuzStream, QobuzTrack, Quality } from './types.js';
+ 
+ const DEFAULT_ID_SECRET = 'qobuz-bitchord-id-secret-v1';
+ 
+-export function publicId(track: QobuzTrack, secret = DEFAULT_ID_SECRET): string {
+-  const encoded = Buffer.from(track.upstreamId, 'utf8').toString('base64url');
++export function publicId(track: QobuzTrack, secret = DEFAULT_ID_SECRET, namespace?: string): string {
++  const payload = namespace ? `${namespace}\u0000${track.upstreamId}` : track.upstreamId;
++  const encoded = Buffer.from(payload, 'utf8').toString('base64url');
+   const signature = sign(encoded, secret);
+   return `qobuz_${encoded}_${signature}`;
+ }
+ 
+-export function upstreamIdFromPublicId(id: string, secret = DEFAULT_ID_SECRET): string | undefined {
++export function upstreamIdFromPublicId(id: string, secret = DEFAULT_ID_SECRET, namespace?: string): string | undefined {
+   const match = /^qobuz_([A-Za-z0-9_-]+)_([A-Za-z0-9_-]{16})$/.exec(id);
+   if (!match) return undefined;
+   const [encoded, supplied] = [match[1], match[2]];
+@@ -18,15 +19,19 @@ export function upstreamIdFromPublicId(id: string, secret = DEFAULT_ID_SECRET):
+   const b = Buffer.from(expected);
+   if (a.length !== b.length || !timingSafeEqual(a, b)) return undefined;
+   try {
+-    const upstreamId = Buffer.from(encoded, 'base64url').toString('utf8');
+-    return upstreamId.trim() || undefined;
++    const payload = Buffer.from(encoded, 'base64url').toString('utf8');
++    if (!namespace) return payload.trim() || undefined;
++    const separator = payload.indexOf('\u0000');
++    if (separator <= 0 || payload.slice(0, separator) !== namespace) return undefined;
++    return payload.slice(separator + 1).trim() || undefined;
+   } catch { return undefined; }
+ }
+ 
+-export function normalizeTrack(track: QobuzTrack, secret?: string): PublicTrack {
++export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: string): PublicTrack {
+   if (!track.upstreamId.trim() || !track.title.trim()) throw new Error('provider returned an unusable track');
++  const normalizedTrack = { ...track, upstreamId: track.upstreamId.trim(), title: track.title.trim() };
+   return {
+-    id: publicId(track, secret), title: track.title.trim(),
++    id: publicId(normalizedTrack, secret, namespace), title: normalizedTrack.title,
+     artist: track.artist?.trim() || undefined, album: track.album?.trim() || undefined,
+     duration: Number.isFinite(track.duration) && (track.duration as number) >= 0 ? track.duration : undefined,
+     artworkURL: absoluteUrl(track.artworkURL), format: track.format?.toLowerCase(),
+diff --git a/src/providers/instable.ts b/src/providers/instable.ts
+index e626c6e..6d3199e 100644
+--- a/src/providers/instable.ts
++++ b/src/providers/instable.ts
+@@ -39,8 +39,8 @@ export class InstableProvider implements QobuzProvider {
+     };
+     this.apiToken    = config.instableApiToken?.trim() || undefined;
+     this.userAgent   = config.instableUserAgent?.trim() || defaultUserAgent();
+-    this.timeoutMs   = Math.max(config.requestTimeoutMs, 8000);
+-    this.maxAttempts = Math.max(config.upstreamRetries, 2);
++    this.timeoutMs   = config.requestTimeoutMs;
++    this.maxAttempts = config.upstreamRetries;
+   }
+ 
+   // ─── search ────────────────────────────────────────────────────────
+@@ -150,6 +150,7 @@ export class InstableProvider implements QobuzProvider {
+ // ─── helpers ──────────────────────────────────────────────────────────
+ 
+ function extractTrackItems(body: unknown): unknown[] {
++  if (Array.isArray(body)) return body;
+   if (!isRecord(body)) return [];
+   const data = isRecord(body.data) ? body.data : body;
+ 
+@@ -161,7 +162,6 @@ function extractTrackItems(body: unknown): unknown[] {
+   if (isRecord(body.tracks) && Array.isArray(body.tracks.items)) return body.tracks.items;
+   // {tracks:[...]} or [...]
+   if (Array.isArray(body.tracks)) return body.tracks;
+-  if (Array.isArray(body)) return body;
+   return [];
+ }
+ 
+diff --git a/src/providers/lastbabe.ts b/src/providers/lastbabe.ts
+index bb65ad9..c5cc31a 100644
+--- a/src/providers/lastbabe.ts
++++ b/src/providers/lastbabe.ts
+@@ -74,11 +74,14 @@ export class LastBabeProvider implements QobuzProvider {
+     const challenge = await challengeResponse.json() as { challenge?: unknown; difficulty?: unknown };
+     if (typeof challenge.challenge !== 'string') throw new UpstreamError(502, 'LastBabe challenge was malformed');
+     
+-    const difficulty = typeof challenge.difficulty === 'number' && challenge.difficulty >= 1 && challenge.difficulty <= 8 ? challenge.difficulty : 4;
++    if (challenge.challenge.length > 4096) throw new UpstreamError(502, 'LastBabe challenge was too large');
++    const difficulty = typeof challenge.difficulty === 'number' && challenge.difficulty >= 1 && challenge.difficulty <= 6 ? challenge.difficulty : 4;
+     const prefix = '0'.repeat(difficulty);
+     
+     let nonce = 0;
+     let found: string | undefined;
++    const deadline = Date.now() + Math.max(this.config.requestTimeoutMs, 15_000);
++    const maxIterations = 10_000_000;
+     
+     // 🚀 OPTIMIZATION: แปลง challenge เป็น Buffer ล่วงหน้าเพื่อลด Overhead
+     const challengeBase = Buffer.from(challenge.challenge, 'utf8');
+@@ -87,6 +90,9 @@ export class LastBabeProvider implements QobuzProvider {
+       // 🚀 OPTIMIZATION: เพิ่ม Batch Size เป็น 100,000 ต่อรอบ เพื่อลดการสลับ Context ของ Event Loop
+       for (let i = 0; i < 100_000; i += 1) {
+         nonce += 1;
++        if (nonce > maxIterations || Date.now() >= deadline) {
++          throw new UpstreamError(504, 'LastBabe proof-of-work timed out');
++        }
+         const candidate = String(nonce);
+         
+         // 🚀 OPTIMIZATION: ใช้ Buffer.concat เร็วกว่าการใช้ String + String มาก
+diff --git a/src/providers/monochrome.ts b/src/providers/monochrome.ts
+index cebe62e..1d5a295 100644
+--- a/src/providers/monochrome.ts
++++ b/src/providers/monochrome.ts
+@@ -16,7 +16,7 @@ export class MonochromeProvider implements QobuzProvider {
+   async getStream(trackId: string, _quality: Quality, _atmos: string): Promise<QobuzStream | null> {
+     if (!/^[A-Za-z0-9_-]+$/.test(trackId)) return null;
+     return {
+-      url: new URL(`/track/${encodeURIComponent(trackId)}`, this.baseUrl()).toString(),
++      url: new URL(`track/${encodeURIComponent(trackId)}`, this.baseUrl().replace(/\/$/, '') + '/').toString(),
+       format: 'flac', quality: 'LOSSLESS', manifest: 'none', encrypted: false,
+     };
+   }
+@@ -24,7 +24,7 @@ export class MonochromeProvider implements QobuzProvider {
+   private baseUrl(): string { return this.config.monochromeBaseUrl ?? 'https://tracks.monochrome.st'; }
+ 
+   private async request(path: string, params: Record<string, string>): Promise<unknown> {
+-  const url = new URL(path, this.baseUrl());
++  const url = new URL(path.replace(/^\/+/, ''), this.baseUrl().replace(/\/$/, '') + '/');
+   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+   let lastError: unknown;
+   for (let attempt = 0; attempt < 2; attempt += 1) {
+diff --git a/src/providers/racing.ts b/src/providers/racing.ts
+index f596f40..63db5e7 100644
+--- a/src/providers/racing.ts
++++ b/src/providers/racing.ts
+@@ -25,12 +25,10 @@ export class RacingProvider implements QobuzProvider {
+       };
+ 
+       for (const source of active) {
+-        const timeout = new Promise<QobuzTrack[]>((_, rej) =>
+-          setTimeout(
+-            () => rej(new Error(`source ${source.name} timed out`)),
+-            this.perSourceTimeoutMs,
+-          ),
+-        );
++        let timeoutHandle: NodeJS.Timeout | undefined;
++        const timeout = new Promise<QobuzTrack[]>((_, rej) => {
++          timeoutHandle = setTimeout(() => rej(new Error(`source ${source.name} timed out`)), this.perSourceTimeoutMs);
++        });
+ 
+         Promise.race([source.provider.search(query, quality, atmos), timeout])
+           .then((tracks) => {
+@@ -51,6 +49,7 @@ export class RacingProvider implements QobuzProvider {
+             lastError = err;
+           })
+           .finally(() => {
++            if (timeoutHandle) clearTimeout(timeoutHandle);
+             pending -= 1;
+             if (pending === 0 && !settled) {
+               if (rejected === active.length) finish(() => reject(lastError));
+diff --git a/src/server.ts b/src/server.ts
+index a9f0444..89d1cc3 100644
+--- a/src/server.ts
++++ b/src/server.ts
+@@ -5,11 +5,26 @@ import { TtlCache } from './cache.js';
+ import { AppError, badRequest, notFound } from './errors.js';
+ import { normalizeTrack, streamResponse, upstreamIdFromPublicId } from './normalize.js';
+ import { createProvider, createSourceProvider, type IsolatedSource } from './providers/index.js';
++import { SlidingWindowRateLimiter, clientKey } from './rate-limit.js';
+ import type { QobuzProvider, Quality, PublicTrack } from './types.js';
+ 
+ const config = loadConfig();
+ const app = Fastify({
+   logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] },
++  requestTimeout: config.serverRequestTimeoutMs,
++});
++const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
++app.addHook('onRequest', async (request, reply) => {
++  const pathname = request.url.split('?', 1)[0];
++  if (!pathname.includes('/search') && !pathname.includes('/stream/') && pathname !== '/health/sources') return;
++  const result = limiter.check(clientKey(request.ip));
++  reply.header('X-RateLimit-Limit', result.limit);
++  reply.header('X-RateLimit-Remaining', result.remaining);
++  reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
++  if (!result.allowed) {
++    reply.header('Retry-After', Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000)));
++    return reply.code(429).send({ error: 'rate limit exceeded' });
++  }
+ });
+ 
+ const manifests = {
+@@ -46,10 +61,10 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
+       let timer: NodeJS.Timeout | undefined;
+       try {
+         const timeoutPromise = new Promise<never>((_, reject) => {
+-          timer = setTimeout(() => reject(new Error('Timeout')), 8000);
++          timer = setTimeout(() => reject(new Error('operation timed out')), config.sourceSearchTimeoutMs);
+         });
+         const tracks = await Promise.race([
+-          provider.search(testQuery, 'LOSSLESS', 'auto'),
++          withTimeout(provider.search(testQuery, 'LOSSLESS', 'auto'), config.sourceSearchTimeoutMs),
+           timeoutPromise,
+         ]);
+         return {
+@@ -63,7 +78,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
+           source: sourceName,
+           status: 'unhealthy' as const,
+           latencyMs: Date.now() - started,
+-          error: error instanceof Error ? error.message : 'Unknown error',
++          error: error instanceof Error && error.message === 'operation timed out' ? 'timeout' : 'upstream unavailable',
+         };
+       } finally {
+         if (timer) clearTimeout(timer);
+@@ -94,12 +109,12 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
+ });
+ 
+ registerAddon('/',    createProvider(config),                     manifests.root);
+-registerAddon('/a',   createSourceProvider(config, 'qobuzdl'),    manifests.qobuzdl);
+-registerAddon('/b',   createSourceProvider(config, 'lastbabe'),   manifests.lastbabe);
+-registerAddon('/c',   createSourceProvider(config, 'monochrome'), manifests.monochrome);
+-registerAddon('/d',   createSourceProvider(config, 'deezer'),     manifests.deezer);
+-registerAddon('/e',   createSourceProvider(config, 'eljohnzc'),   manifests.eljohnzc);
+-registerAddon('/f',   createSourceProvider(config, 'instable'),   manifests.instable);
++registerAddon('/a',   createSourceProvider(config, 'qobuzdl'),    manifests.qobuzdl, 'qobuzdl');
++registerAddon('/b',   createSourceProvider(config, 'lastbabe'),   manifests.lastbabe, 'lastbabe');
++registerAddon('/c',   createSourceProvider(config, 'monochrome'), manifests.monochrome, 'monochrome');
++registerAddon('/d',   createSourceProvider(config, 'deezer'),     manifests.deezer, 'deezer');
++registerAddon('/e',   createSourceProvider(config, 'eljohnzc'),   manifests.eljohnzc, 'eljohnzc');
++registerAddon('/f',   createSourceProvider(config, 'instable'),   manifests.instable, 'instable');
+ 
+ function joinRoute(prefix: string, path: string): string {
+   const head = prefix.replace(/\/+$/, '');
+@@ -111,6 +126,7 @@ function registerAddon(
+   prefix: string,
+   provider: QobuzProvider,
+   manifest: { id: string; name: string; version: string },
++  namespace?: string,
+ ): void {
+   const searchCache = new TtlCache<PublicTrack[]>(config.cacheTtlMs);
+   const route = (path: string): string => joinRoute(prefix, path);
+@@ -143,26 +159,21 @@ function registerAddon(
+     async (request, reply) => {
+       const query = request.query.q?.trim();
+       if (!query) throw badRequest('q is required');
++      if (query.length > config.maxQueryLength) throw badRequest(`q must be at most ${config.maxQueryLength} characters`);
+       const quality = parseQuality(request.query.quality);
+-      const atmos = request.query.atmos ?? 'auto';
++      const atmos = parseAtmos(request.query.atmos);
+       const key = `${query}\u0000${quality}\u0000${atmos}`;
+ 
+-      const cached = searchCache.get(key);
+-      if (cached) {
+-        return reply
+-          .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
+-          .send({ tracks: cached });
+-      }
+-
+       try {
+-        const tracks = (await provider.search(query, quality, atmos)).flatMap((track) => {
+-          try {
+-            return [normalizeTrack(track, config.idSecret)];
+-          } catch {
+-            return [];
+-          }
+-        });
+-        searchCache.set(key, tracks);
++        const tracks = await searchCache.getOrLoad(key, async () =>
++          (await withTimeout(provider.search(query, quality, atmos), config.serverRequestTimeoutMs)).flatMap((track) => {
++            try {
++              return [normalizeTrack(track, config.idSecret, namespace)];
++            } catch {
++              return [];
++            }
++          }),
++        );
+         return reply
+           .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
+           .send({ tracks });
+@@ -182,12 +193,12 @@ function registerAddon(
+     route('/stream/:id'),
+     async (request, reply) => {
+       const quality = parseQuality(request.query.quality);
+-      const atmos = request.query.atmos ?? 'auto';
++      const atmos = parseAtmos(request.query.atmos);
+       const id = request.params.id;
+       if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
+-      const upstreamId = upstreamIdFromPublicId(id, config.idSecret);
++      const upstreamId = upstreamIdFromPublicId(id, config.idSecret, namespace);
+       if (!upstreamId) throw notFound('track not available');
+-      const stream = await provider.getStream(upstreamId, quality, atmos);
++      const stream = await withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs);
+       if (!stream) throw notFound('track not available');
+       try {
+         return reply.send(streamResponse(stream, quality));
+@@ -215,6 +226,17 @@ function parseQuality(value?: string): Quality {
+   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
+   throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
+ }
++function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
++  const normalized = (value ?? 'auto').toLowerCase();
++  if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
++  throw badRequest('atmos must be auto, on, or off');
++}
++function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
++  return new Promise<T>((resolve, reject) => {
++    const timer = setTimeout(() => reject(new Error('operation timed out')), timeoutMs);
++    promise.then(resolve, reject).finally(() => clearTimeout(timer));
++  });
++}
+ 
+ if (process.env.VERCEL !== '1') {
+   app
+diff --git a/tsconfig.json b/tsconfig.json
+index 9658096..79d3ea1 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -6,6 +6,7 @@
+     "outDir": "dist",
+     "rootDir": "src",
+     "strict": true,
++    "noEmitOnError": true,
+     "esModuleInterop": true,
+     "forceConsistentCasingInFileNames": true,
+     "skipLibCheck": true,
+diff --git a/src/rate-limit.ts b/src/rate-limit.ts
+new file mode 100644
+index 0000000..6a5faf2
+--- /dev/null
++++ b/src/rate-limit.ts
+@@ -0,0 +1,52 @@
++export interface RateLimitResult {
++  allowed: boolean;
++  limit: number;
++  remaining: number;
++  resetAt: number;
++}
++
++interface Bucket {
++  count: number;
++  windowStartedAt: number;
++}
++
++export class SlidingWindowRateLimiter {
++  private readonly buckets = new Map<string, Bucket>();
++
++  constructor(
++    private readonly maxRequests: number,
++    private readonly windowMs: number,
++    private readonly maxKeys = 10_000,
++  ) {
++    if (!Number.isInteger(maxRequests) || maxRequests <= 0) throw new Error('maxRequests must be positive');
++    if (!Number.isInteger(windowMs) || windowMs <= 0) throw new Error('windowMs must be positive');
++  }
++
++  check(key: string, now = Date.now()): RateLimitResult {
++    const existing = this.buckets.get(key);
++    const expired = !existing || now - existing.windowStartedAt >= this.windowMs;
++    const bucket = expired ? { count: 0, windowStartedAt: now } : existing;
++
++    if (expired && this.buckets.size >= this.maxKeys && !this.buckets.has(key)) {
++      const oldest = this.buckets.keys().next().value;
++      if (typeof oldest === 'string') this.buckets.delete(oldest);
++    }
++
++    bucket.count += 1;
++    this.buckets.set(key, bucket);
++    const resetAt = bucket.windowStartedAt + this.windowMs;
++    const allowed = bucket.count <= this.maxRequests;
++    return {
++      allowed,
++      limit: this.maxRequests,
++      remaining: Math.max(0, this.maxRequests - bucket.count),
++      resetAt,
++    };
++  }
++}
++
++export function clientKey(ip: string | undefined, forwardedFor?: string): string {
++  // Use Fastify's parsed address by default. Only use the first forwarded value
++  // when the deployment explicitly trusts its reverse proxy.
++  return (forwardedFor?.split(',')[0]?.trim() || ip || 'unknown').slice(0, 128);
++}
+diff --git a/test/security.test.ts b/test/security.test.ts
+new file mode 100644
+index 0000000..2164cf9
+--- /dev/null
++++ b/test/security.test.ts
+@@ -0,0 +1,45 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { SlidingWindowRateLimiter, clientKey } from '../src/rate-limit.js';
++import { TtlCache } from '../src/cache.js';
++
++test('rate limiter blocks after the configured window quota', () => {
++  const limiter = new SlidingWindowRateLimiter(2, 1000);
++  assert.equal(limiter.check('client', 0).allowed, true);
++  assert.equal(limiter.check('client', 1).allowed, true);
++  const blocked = limiter.check('client', 2);
++  assert.equal(blocked.allowed, false);
++  assert.equal(blocked.remaining, 0);
++  assert.equal(limiter.check('client', 1001).allowed, true);
++});
++
++test('rate limiter bounds the number of tracked clients', () => {
++  const limiter = new SlidingWindowRateLimiter(1, 1000, 2);
++  limiter.check('a', 0);
++  limiter.check('b', 0);
++  limiter.check('c', 0);
++  assert.equal(limiter.check('c', 1).allowed, false);
++  assert.equal(limiter.check('a', 1).allowed, true);
++});
++
++test('client key prefers the first trusted forwarded address', () => {
++  assert.equal(clientKey('10.0.0.1', '203.0.113.5, 10.0.0.1'), '203.0.113.5');
++  assert.equal(clientKey('10.0.0.1'), '10.0.0.1');
++});
++
++test('cache deduplicates concurrent loaders', async () => {
++  const cache = new TtlCache<string>(1000);
++  let calls = 0;
++  const loader = async () => {
++    calls += 1;
++    await new Promise((resolve) => setTimeout(resolve, 5));
++    return 'value';
++  };
++  const values = await Promise.all([
++    cache.getOrLoad('key', loader),
++    cache.getOrLoad('key', loader),
++    cache.getOrLoad('key', loader),
++  ]);
++  assert.deepEqual(values, ['value', 'value', 'value']);
++  assert.equal(calls, 1);
++});
+diff --git a/test/source-namespace.test.ts b/test/source-namespace.test.ts
+new file mode 100644
+index 0000000..51eb0cd
+--- /dev/null
++++ b/test/source-namespace.test.ts
+@@ -0,0 +1,10 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { normalizeTrack, upstreamIdFromPublicId } from '../src/normalize.js';
++
++test('namespaced IDs only verify for the original isolated source', () => {
++  const id = normalizeTrack({ upstreamId: '123', title: 'Song' }, 'test-secret', 'qobuzdl').id;
++  assert.equal(upstreamIdFromPublicId(id, 'test-secret', 'qobuzdl'), '123');
++  assert.equal(upstreamIdFromPublicId(id, 'test-secret', 'instable'), undefined);
++  assert.equal(upstreamIdFromPublicId(id, 'test-secret'), 'qobuzdl\u0000123');
++});
