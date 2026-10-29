@@ -1,210 +1,470 @@
-[1mdiff --git a/.env.example b/.env.example[m
-[1mindex 0f463f6..2ddc908 100644[m
-[1m--- a/.env.example[m
-[1m+++ b/.env.example[m
-[36m@@ -25,8 +25,13 @@[m [mSOURCE_SEARCH_TIMEOUT_MS=3000[m
- # TUNING — leave at defaults unless you have a reason.[m
- # ═══════════════════════════════════════════════════════════════════[m
- REQUEST_TIMEOUT_MS=6000          # whole HTTP request ceiling[m
-[32m+[m[32mSERVER_REQUEST_TIMEOUT_MS=10000  # hard deadline for each public route[m
- UPSTREAM_RETRIES=1               # retry count for retryable upstream 5xx[m
- CACHE_TTL_SECONDS=300            # how long search results are cached[m
-[32m+[m[32mRATE_LIMIT_WINDOW_MS=60000       # rate-limit window per client[m
-[32m+[m[32mRATE_LIMIT_MAX_REQUESTS=60       # search/stream/health requests per window[m
-[32m+[m[32mRATE_LIMIT_MAX_KEYS=10000        # maximum client buckets kept in memory[m
-[32m+[m[32mMAX_QUERY_LENGTH=200              # maximum search query length[m
- [m
- [m
- # ═══════════════════════════════════════════════════════════════════[m
-[1mdiff --git a/api/index.ts b/api/index.ts[m
-[1mindex 957bb1f..ef8701b 100644[m
-[1m--- a/api/index.ts[m
-[1m+++ b/api/index.ts[m
-[36m@@ -15,16 +15,12 @@[m [mexport default async function handler(req: IncomingMessage, res: ServerResponse)[m
-       res.on('error', reject);[m
-       app.server.emit('request', req, res);[m
-     });[m
-[31m-  } catch (error: any) {[m
-[31m-    console.error('FATAL FUNCTION ERROR:', error);[m
-[32m+[m[32m  } catch (error: unknown) {[m
-[32m+[m[32m    console.error('FATAL FUNCTION ERROR:', error instanceof Error ? error.message : 'unknown error');[m
-     if (!res.headersSent) {[m
-       res.statusCode = 500;[m
-       res.setHeader('content-type', 'application/json');[m
-[31m-      res.end(JSON.stringify({ [m
-[31m-        error: 'Function crashed', [m
-[31m-        message: error.message || String(error),[m
-[31m-        stack: error.stack [m
-[31m-      }));[m
-[32m+[m[32m      res.end(JSON.stringify({ error: 'internal server error' }));[m
-     }[m
-   }[m
- }[m
-[1mdiff --git a/package-lock.json b/package-lock.json[m
-[1mindex 72dad53..211886a 100644[m
-[1m--- a/package-lock.json[m
-[1m+++ b/package-lock.json[m
-[36m@@ -8,7 +8,7 @@[m
-       "name": "qobuz-bitchord-addon",[m
-       "version": "1.0.0",[m
-       "dependencies": {[m
-[31m-        "fastify": "^5.0.0"[m
-[32m+[m[32m        "fastify": "^5.12.7"[m
-       },[m
-       "devDependencies": {[m
-         "@types/node": "^22.0.0",[m
-[36m@@ -628,9 +628,9 @@[m
-       }[m
-     },[m
-     "node_modules/ajv/node_modules/fast-uri": {[m
-[31m-      "version": "3.1.8",[m
-[31m-      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz",[m
-[31m-      "integrity": "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==",[m
-[32m+[m[32m      "version": "3.1.9",[m
-[32m+[m[32m      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.9.tgz",[m
-[32m+[m[32m      "integrity": "sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==",[m
-       "funding": [[m
-         {[m
-           "type": "github",[m
-[36m@@ -782,9 +782,9 @@[m
-       }[m
-     },[m
-     "node_modules/fast-uri": {[m
-[31m-      "version": "4.2.1",[m
-[31m-      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-4.2.1.tgz",[m
-[31m-      "integrity": "sha512-TmHQgewjHtMq1E5QKA0tOE0yeYGQs25KZC/ziJpubRtWI15W92e6vPFydWOeZBVROSHBYw/QhD9d5OefdD6LDg==",[m
-[32m+[m[32m      "version": "4.2.3",[m
-[32m+[m[32m      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-4.2.3.tgz",[m
-[32m+[m[32m      "integrity": "sha512-I1PXwP5eAhlNlcdpjt9CgB59op2ZvZfxw+BkqGFVIUOgNpCVTcTqp3HhTX7brxj5vsip+nSY4nTvff+eIA76hg==",[m
-       "funding": [[m
-         {[m
-           "type": "github",[m
-[36m@@ -798,9 +798,9 @@[m
-       "license": "BSD-3-Clause"[m
-     },[m
-     "node_modules/fastify": {[m
-[31m-      "version": "5.12.5",[m
-[31m-      "resolved": "https://registry.npmjs.org/fastify/-/fastify-5.12.5.tgz",[m
-[31m-      "integrity": "sha512-OB2k1dlxs5/NAABqeKV2FUHkSD2BbENsCak8yULVcymn3fHIPDVa9TI3SDnJSWYSllZmSYuZXy2gTnsT+Sut1A==",[m
-[32m+[m[32m      "version": "5.12.7",[m
-[32m+[m[32m      "resolved": "https://registry.npmjs.org/fastify/-/fastify-5.12.7.tgz",[m
-[32m+[m[32m      "integrity": "sha512-v4pEPsTRPuqlDIYiQFB+BHjVN4SdHX9u0ABk0ZDUKbbdY1vsNryUd1j4Z+jQEZajvYIVk047Kimva9/AJ79GYw==",[m
-       "funding": [[m
-         {[m
-           "type": "github",[m
-[1mdiff --git a/package.json b/package.json[m
-[1mindex 09505e2..cae9ab3 100644[m
-[1m--- a/package.json[m
-[1m+++ b/package.json[m
-[36m@@ -4,14 +4,18 @@[m
-   "private": true,[m
-   "description": "Playback-only BitChord addon with a replaceable authorized Qobuz provider.",[m
-   "type": "module",[m
-[31m-  "engines": { "node": "24.x" },[m
-[32m+[m[32m  "engines": {[m
-[32m+[m[32m    "node": "24.x"[m
-[32m+[m[32m  },[m
-   "scripts": {[m
-     "build": "tsc -p tsconfig.json",[m
-     "start": "npm install --omit=dev --no-audit --no-fund && node dist/server.js",[m
-     "dev": "tsx watch src/server.ts",[m
-     "test": "tsx --test test/**/*.test.ts"[m
-   },[m
-[31m-  "dependencies": { "fastify": "^5.0.0" },[m
-[32m+[m[32m  "dependencies": {[m
-[32m+[m[32m    "fastify": "^5.12.7"[m
-[32m+[m[32m  },[m
-   "devDependencies": {[m
-     "@types/node": "^22.0.0",[m
-     "tsx": "^4.19.0",[m
-[1mdiff --git a/src/cache.ts b/src/cache.ts[m
-[1mindex 93b67d8..ca49db1 100644[m
-[1m--- a/src/cache.ts[m
-[1m+++ b/src/cache.ts[m
-[36m@@ -1,5 +1,6 @@[m
- export class TtlCache<V> {[m
-   private readonly values = new Map<string, { value: V; expiresAt: number }>();[m
-[32m+[m[32m  private readonly inflight = new Map<string, Promise<V>>();[m
-   constructor(private readonly ttlMs: number, private readonly maxEntries = 100) {}[m
-   get(key: string): V | undefined {[m
-     const hit = this.values.get(key);[m
-[36m@@ -10,7 +11,22 @@[m [mexport class TtlCache<V> {[m
-   getStale(key: string): V | undefined {[m
-     return this.values.get(key)?.value;[m
-   }[m
-[32m+[m[32m  async getOrLoad(key: string, loader: () => Promise<V>): Promise<V> {[m
-[32m+[m[32m    const cached = this.get(key);[m
-[32m+[m[32m    if (cached !== undefined) return cached;[m
-[32m+[m[32m    const existing = this.inflight.get(key);[m
-[32m+[m[32m    if (existing) return existing;[m
-[32m+[m[32m    const pending = loader().then((value) => {[m
-[32m+[m[32m      this.set(key, value);[m
-[32m+[m[32m      return value;[m
-[32m+[m[32m    }).finally(() => this.inflight.delete(key));[m
-[32m+[m[32m    this.inflight.set(key, pending);[m
-[32m+[m[32m    return pending;[m
-[32m+[m[32m  }[m
-   set(key: string, value: V): void {[m
-[32m+[m[32m    for (const [entryKey, entry] of this.values) {[m
-[32m+[m[32m      if (entry.expiresAt <= Date.now()) this.values.delete(entryKey);[m
-[32m+[m[32m    }[m
-     if (this.values.size >= this.maxEntries && !this.values.has(key)) this.values.delete(this.values.keys().next().value as string);[m
-     this.values.set(key, { value, expiresAt: Date.now() + this.ttlMs });[m
-   }[m
-[1mdiff --git a/src/config.ts b/src/config.ts[m
-[1mindex f2b2524..6c78900 100644[m
-[1m--- a/src/config.ts[m
-[1m+++ b/src/config.ts[m
-[36m@@ -7,6 +7,7 @@[m [mexport interface Config {[m
-   host: string;[m
-   port: number;[m
-   requestTimeoutMs: number;[m
-[32m+[m[32m  serverRequestTimeoutMs: number;[m
-   upstreamRetries: number;[m
-   cacheTtlMs: number;[m
-   idSecret: string;[m
-[36m@@ -31,6 +32,10 @@[m [mexport interface Config {[m
-   instableUserAgent?: string;[m
-   enabledSources: Set<KnownSource>;[m
-   sourceSearchTimeoutMs: number;[m
-[32m+[m[32m  rateLimitWindowMs: number;[m
-[32m+[m[32m  rateLimitMaxRequests: number;[m
-[32m+[m[32m  rateLimitMaxKeys: number;[m
-[32m+[m[32m  maxQueryLength: number;[m
- }[m
- [m
- const DEV_ID_SECRET = 'qobuz-bitchord-id-secret-dev-only';[m
-[36m@@ -65,7 +70,8 @@[m [mexport function loadConfig(): Config {[m
-     'https://qobuz-dll.foreyou.workers.dev';[m
- [m
-   const secretEnv = process.env.QOBUZ_ID_SECRET?.trim();[m
-[31m-  if (!secretEnv && process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'development') {[m
-[32m+[m[32m  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';[m
-[32m+[m[32m  if (!secretEnv && isProduction) {[m
-     throw new Error('QOBUZ_ID_SECRET is required in production');[m
-   }[m
- [m
-[36m@@ -73,6 +79,7 @@[m [mexport function loadConfig(): Config {[m
-     host: process.env.HOST ?? '0.0.0.0',[m
-     port: positiveInt('PORT', Number(process.env.SERVER_PORT) || 3000),[m
-     requestTimeoutMs: positiveInt('REQUEST_TIMEOUT_MS', 6000),[m
-[32m+[m[32m    serverRequestTimeoutMs: positiveInt('SERVER_REQUEST_TIMEOUT_MS', 10_000),[m
-     upstreamRetries: positiveInt('UPSTREAM_RETRIES', 1),[m
-     cacheTtlMs: positiveInt('CACHE_TTL_SECONDS', 300) * 1000,[m
-     idSecret: secretEnv || DEV_ID_SECRET,[m
-[36m@@ -99,5 +106,9 @@[m [mexport function loadConfig(): Config {[m
-     instableUserAgent: process.env.INSTABLE_USER_AGENT?.trim(),[m
-     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),[m
-     sourceSearchTimeoutMs: positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 3000),[m
-[32m+[m[32m    rateLimitWindowMs: positiveInt('RATE_LIMIT_WINDOW_MS', 60_000),[m
-[32m+[m[32m    rateLimitMaxRequests: positiveInt('RATE_LIMIT_MAX_REQUESTS', 60),[m
-[32m+[m[32m    rateLimitMaxKeys: positiveInt('RATE_LIMIT_MAX_KEYS', 10_000),[m
-[32m+[m[32m    maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),[m
-   };[m
- }[m
-[1mdiff --git a/src/providers/racing.ts b/src/providers/racing.ts[m
-[1mindex f596f40..63db5e7 100644[m
-[1m--- a/src/providers/racing.ts[m
+diff --git a/.env.example b/.env.example
+index 0f463f6..2ddc908 100644
+--- a/.env.example
++++ b/.env.example
+@@ -25,8 +25,13 @@ SOURCE_SEARCH_TIMEOUT_MS=3000
+ # TUNING — leave at defaults unless you have a reason.
+ # ═══════════════════════════════════════════════════════════════════
+ REQUEST_TIMEOUT_MS=6000          # whole HTTP request ceiling
++SERVER_REQUEST_TIMEOUT_MS=10000  # hard deadline for each public route
+ UPSTREAM_RETRIES=1               # retry count for retryable upstream 5xx
+ CACHE_TTL_SECONDS=300            # how long search results are cached
++RATE_LIMIT_WINDOW_MS=60000       # rate-limit window per client
++RATE_LIMIT_MAX_REQUESTS=60       # search/stream/health requests per window
++RATE_LIMIT_MAX_KEYS=10000        # maximum client buckets kept in memory
++MAX_QUERY_LENGTH=200              # maximum search query length
+ 
+ 
+ # ═══════════════════════════════════════════════════════════════════
+diff --git a/api/index.ts b/api/index.ts
+index 957bb1f..ef8701b 100644
+--- a/api/index.ts
++++ b/api/index.ts
+@@ -15,16 +15,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
+       res.on('error', reject);
+       app.server.emit('request', req, res);
+     });
+-  } catch (error: any) {
+-    console.error('FATAL FUNCTION ERROR:', error);
++  } catch (error: unknown) {
++    console.error('FATAL FUNCTION ERROR:', error instanceof Error ? error.message : 'unknown error');
+     if (!res.headersSent) {
+       res.statusCode = 500;
+       res.setHeader('content-type', 'application/json');
+-      res.end(JSON.stringify({ 
+-        error: 'Function crashed', 
+-        message: error.message || String(error),
+-        stack: error.stack 
+-      }));
++      res.end(JSON.stringify({ error: 'internal server error' }));
+     }
+   }
+ }
+diff --git a/package-lock.json b/package-lock.json
+index 72dad53..211886a 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -8,7 +8,7 @@
+       "name": "qobuz-bitchord-addon",
+       "version": "1.0.0",
+       "dependencies": {
+-        "fastify": "^5.0.0"
++        "fastify": "^5.12.7"
+       },
+       "devDependencies": {
+         "@types/node": "^22.0.0",
+@@ -628,9 +628,9 @@
+       }
+     },
+     "node_modules/ajv/node_modules/fast-uri": {
+-      "version": "3.1.8",
+-      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz",
+-      "integrity": "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==",
++      "version": "3.1.9",
++      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.9.tgz",
++      "integrity": "sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==",
+       "funding": [
+         {
+           "type": "github",
+@@ -782,9 +782,9 @@
+       }
+     },
+     "node_modules/fast-uri": {
+-      "version": "4.2.1",
+-      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-4.2.1.tgz",
+-      "integrity": "sha512-TmHQgewjHtMq1E5QKA0tOE0yeYGQs25KZC/ziJpubRtWI15W92e6vPFydWOeZBVROSHBYw/QhD9d5OefdD6LDg==",
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-4.2.3.tgz",
++      "integrity": "sha512-I1PXwP5eAhlNlcdpjt9CgB59op2ZvZfxw+BkqGFVIUOgNpCVTcTqp3HhTX7brxj5vsip+nSY4nTvff+eIA76hg==",
+       "funding": [
+         {
+           "type": "github",
+@@ -798,9 +798,9 @@
+       "license": "BSD-3-Clause"
+     },
+     "node_modules/fastify": {
+-      "version": "5.12.5",
+-      "resolved": "https://registry.npmjs.org/fastify/-/fastify-5.12.5.tgz",
+-      "integrity": "sha512-OB2k1dlxs5/NAABqeKV2FUHkSD2BbENsCak8yULVcymn3fHIPDVa9TI3SDnJSWYSllZmSYuZXy2gTnsT+Sut1A==",
++      "version": "5.12.7",
++      "resolved": "https://registry.npmjs.org/fastify/-/fastify-5.12.7.tgz",
++      "integrity": "sha512-v4pEPsTRPuqlDIYiQFB+BHjVN4SdHX9u0ABk0ZDUKbbdY1vsNryUd1j4Z+jQEZajvYIVk047Kimva9/AJ79GYw==",
+       "funding": [
+         {
+           "type": "github",
+diff --git a/package.json b/package.json
+index 09505e2..cae9ab3 100644
+--- a/package.json
++++ b/package.json
+@@ -4,14 +4,18 @@
+   "private": true,
+   "description": "Playback-only BitChord addon with a replaceable authorized Qobuz provider.",
+   "type": "module",
+-  "engines": { "node": "24.x" },
++  "engines": {
++    "node": "24.x"
++  },
+   "scripts": {
+     "build": "tsc -p tsconfig.json",
+     "start": "npm install --omit=dev --no-audit --no-fund && node dist/server.js",
+     "dev": "tsx watch src/server.ts",
+     "test": "tsx --test test/**/*.test.ts"
+   },
+-  "dependencies": { "fastify": "^5.0.0" },
++  "dependencies": {
++    "fastify": "^5.12.7"
++  },
+   "devDependencies": {
+     "@types/node": "^22.0.0",
+     "tsx": "^4.19.0",
+diff --git a/src/cache.ts b/src/cache.ts
+index 93b67d8..ca49db1 100644
+--- a/src/cache.ts
++++ b/src/cache.ts
+@@ -1,5 +1,6 @@
+ export class TtlCache<V> {
+   private readonly values = new Map<string, { value: V; expiresAt: number }>();
++  private readonly inflight = new Map<string, Promise<V>>();
+   constructor(private readonly ttlMs: number, private readonly maxEntries = 100) {}
+   get(key: string): V | undefined {
+     const hit = this.values.get(key);
+@@ -10,7 +11,22 @@ export class TtlCache<V> {
+   getStale(key: string): V | undefined {
+     return this.values.get(key)?.value;
+   }
++  async getOrLoad(key: string, loader: () => Promise<V>): Promise<V> {
++    const cached = this.get(key);
++    if (cached !== undefined) return cached;
++    const existing = this.inflight.get(key);
++    if (existing) return existing;
++    const pending = loader().then((value) => {
++      this.set(key, value);
++      return value;
++    }).finally(() => this.inflight.delete(key));
++    this.inflight.set(key, pending);
++    return pending;
++  }
+   set(key: string, value: V): void {
++    for (const [entryKey, entry] of this.values) {
++      if (entry.expiresAt <= Date.now()) this.values.delete(entryKey);
++    }
+     if (this.values.size >= this.maxEntries && !this.values.has(key)) this.values.delete(this.values.keys().next().value as string);
+     this.values.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+   }
+diff --git a/src/config.ts b/src/config.ts
+index f2b2524..6c78900 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -7,6 +7,7 @@ export interface Config {
+   host: string;
+   port: number;
+   requestTimeoutMs: number;
++  serverRequestTimeoutMs: number;
+   upstreamRetries: number;
+   cacheTtlMs: number;
+   idSecret: string;
+@@ -31,6 +32,10 @@ export interface Config {
+   instableUserAgent?: string;
+   enabledSources: Set<KnownSource>;
+   sourceSearchTimeoutMs: number;
++  rateLimitWindowMs: number;
++  rateLimitMaxRequests: number;
++  rateLimitMaxKeys: number;
++  maxQueryLength: number;
+ }
+ 
+ const DEV_ID_SECRET = 'qobuz-bitchord-id-secret-dev-only';
+@@ -65,7 +70,8 @@ export function loadConfig(): Config {
+     'https://qobuz-dll.foreyou.workers.dev';
+ 
+   const secretEnv = process.env.QOBUZ_ID_SECRET?.trim();
+-  if (!secretEnv && process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'development') {
++  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
++  if (!secretEnv && isProduction) {
+     throw new Error('QOBUZ_ID_SECRET is required in production');
+   }
+ 
+@@ -73,6 +79,7 @@ export function loadConfig(): Config {
+     host: process.env.HOST ?? '0.0.0.0',
+     port: positiveInt('PORT', Number(process.env.SERVER_PORT) || 3000),
+     requestTimeoutMs: positiveInt('REQUEST_TIMEOUT_MS', 6000),
++    serverRequestTimeoutMs: positiveInt('SERVER_REQUEST_TIMEOUT_MS', 10_000),
+     upstreamRetries: positiveInt('UPSTREAM_RETRIES', 1),
+     cacheTtlMs: positiveInt('CACHE_TTL_SECONDS', 300) * 1000,
+     idSecret: secretEnv || DEV_ID_SECRET,
+@@ -99,5 +106,9 @@ export function loadConfig(): Config {
+     instableUserAgent: process.env.INSTABLE_USER_AGENT?.trim(),
+     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),
+     sourceSearchTimeoutMs: positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 3000),
++    rateLimitWindowMs: positiveInt('RATE_LIMIT_WINDOW_MS', 60_000),
++    rateLimitMaxRequests: positiveInt('RATE_LIMIT_MAX_REQUESTS', 60),
++    rateLimitMaxKeys: positiveInt('RATE_LIMIT_MAX_KEYS', 10_000),
++    maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
+   };
+ }
+diff --git a/src/providers/racing.ts b/src/providers/racing.ts
+index f596f40..63db5e7 100644
+--- a/src/providers/racing.ts
++++ b/src/providers/racing.ts
+@@ -25,12 +25,10 @@ export class RacingProvider implements QobuzProvider {
+       };
+ 
+       for (const source of active) {
+-        const timeout = new Promise<QobuzTrack[]>((_, rej) =>
+-          setTimeout(
+-            () => rej(new Error(`source ${source.name} timed out`)),
+-            this.perSourceTimeoutMs,
+-          ),
+-        );
++        let timeoutHandle: NodeJS.Timeout | undefined;
++        const timeout = new Promise<QobuzTrack[]>((_, rej) => {
++          timeoutHandle = setTimeout(() => rej(new Error(`source ${source.name} timed out`)), this.perSourceTimeoutMs);
++        });
+ 
+         Promise.race([source.provider.search(query, quality, atmos), timeout])
+           .then((tracks) => {
+@@ -51,6 +49,7 @@ export class RacingProvider implements QobuzProvider {
+             lastError = err;
+           })
+           .finally(() => {
++            if (timeoutHandle) clearTimeout(timeoutHandle);
+             pending -= 1;
+             if (pending === 0 && !settled) {
+               if (rejected === active.length) finish(() => reject(lastError));
+diff --git a/src/server.ts b/src/server.ts
+index a9f0444..56b672c 100644
+--- a/src/server.ts
++++ b/src/server.ts
+@@ -5,11 +5,26 @@ import { TtlCache } from './cache.js';
+ import { AppError, badRequest, notFound } from './errors.js';
+ import { normalizeTrack, streamResponse, upstreamIdFromPublicId } from './normalize.js';
+ import { createProvider, createSourceProvider, type IsolatedSource } from './providers/index.js';
++import { SlidingWindowRateLimiter, clientKey } from './rate-limit.js';
+ import type { QobuzProvider, Quality, PublicTrack } from './types.js';
+ 
+ const config = loadConfig();
+ const app = Fastify({
+   logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] },
++  requestTimeout: config.serverRequestTimeoutMs,
++});
++const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
++app.addHook('onRequest', async (request, reply) => {
++  const pathname = request.url.split('?', 1)[0];
++  if (!pathname.includes('/search') && !pathname.includes('/stream/') && pathname !== '/health/sources') return;
++  const result = limiter.check(clientKey(request.ip));
++  reply.header('X-RateLimit-Limit', result.limit);
++  reply.header('X-RateLimit-Remaining', result.remaining);
++  reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
++  if (!result.allowed) {
++    reply.header('Retry-After', Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000)));
++    return reply.code(429).send({ error: 'rate limit exceeded' });
++  }
+ });
+ 
+ const manifests = {
+@@ -46,10 +61,10 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
+       let timer: NodeJS.Timeout | undefined;
+       try {
+         const timeoutPromise = new Promise<never>((_, reject) => {
+-          timer = setTimeout(() => reject(new Error('Timeout')), 8000);
++          timer = setTimeout(() => reject(new Error('operation timed out')), config.sourceSearchTimeoutMs);
+         });
+         const tracks = await Promise.race([
+-          provider.search(testQuery, 'LOSSLESS', 'auto'),
++          withTimeout(provider.search(testQuery, 'LOSSLESS', 'auto'), config.sourceSearchTimeoutMs),
+           timeoutPromise,
+         ]);
+         return {
+@@ -63,7 +78,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
+           source: sourceName,
+           status: 'unhealthy' as const,
+           latencyMs: Date.now() - started,
+-          error: error instanceof Error ? error.message : 'Unknown error',
++          error: error instanceof Error && error.message === 'operation timed out' ? 'timeout' : 'upstream unavailable',
+         };
+       } finally {
+         if (timer) clearTimeout(timer);
+@@ -143,26 +158,21 @@ function registerAddon(
+     async (request, reply) => {
+       const query = request.query.q?.trim();
+       if (!query) throw badRequest('q is required');
++      if (query.length > config.maxQueryLength) throw badRequest(`q must be at most ${config.maxQueryLength} characters`);
+       const quality = parseQuality(request.query.quality);
+-      const atmos = request.query.atmos ?? 'auto';
++      const atmos = parseAtmos(request.query.atmos);
+       const key = `${query}\u0000${quality}\u0000${atmos}`;
+ 
+-      const cached = searchCache.get(key);
+-      if (cached) {
+-        return reply
+-          .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
+-          .send({ tracks: cached });
+-      }
+-
+       try {
+-        const tracks = (await provider.search(query, quality, atmos)).flatMap((track) => {
+-          try {
+-            return [normalizeTrack(track, config.idSecret)];
+-          } catch {
+-            return [];
+-          }
+-        });
+-        searchCache.set(key, tracks);
++        const tracks = await searchCache.getOrLoad(key, async () =>
++          (await withTimeout(provider.search(query, quality, atmos), config.serverRequestTimeoutMs)).flatMap((track) => {
++            try {
++              return [normalizeTrack(track, config.idSecret)];
++            } catch {
++              return [];
++            }
++          }),
++        );
+         return reply
+           .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
+           .send({ tracks });
+@@ -182,12 +192,12 @@ function registerAddon(
+     route('/stream/:id'),
+     async (request, reply) => {
+       const quality = parseQuality(request.query.quality);
+-      const atmos = request.query.atmos ?? 'auto';
++      const atmos = parseAtmos(request.query.atmos);
+       const id = request.params.id;
+       if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
+       const upstreamId = upstreamIdFromPublicId(id, config.idSecret);
+       if (!upstreamId) throw notFound('track not available');
+-      const stream = await provider.getStream(upstreamId, quality, atmos);
++      const stream = await withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs);
+       if (!stream) throw notFound('track not available');
+       try {
+         return reply.send(streamResponse(stream, quality));
+@@ -215,6 +225,17 @@ function parseQuality(value?: string): Quality {
+   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
+   throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
+ }
++function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
++  const normalized = (value ?? 'auto').toLowerCase();
++  if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
++  throw badRequest('atmos must be auto, on, or off');
++}
++function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
++  return new Promise<T>((resolve, reject) => {
++    const timer = setTimeout(() => reject(new Error('operation timed out')), timeoutMs);
++    promise.then(resolve, reject).finally(() => clearTimeout(timer));
++  });
++}
+ 
+ if (process.env.VERCEL !== '1') {
+   app
+diff --git a/src/rate-limit.ts b/src/rate-limit.ts
+new file mode 100644
+index 0000000..6a5faf2
+--- /dev/null
++++ b/src/rate-limit.ts
+@@ -0,0 +1,52 @@
++export interface RateLimitResult {
++  allowed: boolean;
++  limit: number;
++  remaining: number;
++  resetAt: number;
++}
++
++interface Bucket {
++  count: number;
++  windowStartedAt: number;
++}
++
++export class SlidingWindowRateLimiter {
++  private readonly buckets = new Map<string, Bucket>();
++
++  constructor(
++    private readonly maxRequests: number,
++    private readonly windowMs: number,
++    private readonly maxKeys = 10_000,
++  ) {
++    if (!Number.isInteger(maxRequests) || maxRequests <= 0) throw new Error('maxRequests must be positive');
++    if (!Number.isInteger(windowMs) || windowMs <= 0) throw new Error('windowMs must be positive');
++  }
++
++  check(key: string, now = Date.now()): RateLimitResult {
++    const existing = this.buckets.get(key);
++    const expired = !existing || now - existing.windowStartedAt >= this.windowMs;
++    const bucket = expired ? { count: 0, windowStartedAt: now } : existing;
++
++    if (expired && this.buckets.size >= this.maxKeys && !this.buckets.has(key)) {
++      const oldest = this.buckets.keys().next().value;
++      if (typeof oldest === 'string') this.buckets.delete(oldest);
++    }
++
++    bucket.count += 1;
++    this.buckets.set(key, bucket);
++    const resetAt = bucket.windowStartedAt + this.windowMs;
++    const allowed = bucket.count <= this.maxRequests;
++    return {
++      allowed,
++      limit: this.maxRequests,
++      remaining: Math.max(0, this.maxRequests - bucket.count),
++      resetAt,
++    };
++  }
++}
++
++export function clientKey(ip: string | undefined, forwardedFor?: string): string {
++  // Use Fastify's parsed address by default. Only use the first forwarded value
++  // when the deployment explicitly trusts its reverse proxy.
++  return (forwardedFor?.split(',')[0]?.trim() || ip || 'unknown').slice(0, 128);
++}
+diff --git a/test/security.test.ts b/test/security.test.ts
+new file mode 100644
+index 0000000..2164cf9
+--- /dev/null
++++ b/test/security.test.ts
+@@ -0,0 +1,45 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { SlidingWindowRateLimiter, clientKey } from '../src/rate-limit.js';
++import { TtlCache } from '../src/cache.js';
++
++test('rate limiter blocks after the configured window quota', () => {
++  const limiter = new SlidingWindowRateLimiter(2, 1000);
++  assert.equal(limiter.check('client', 0).allowed, true);
++  assert.equal(limiter.check('client', 1).allowed, true);
++  const blocked = limiter.check('client', 2);
++  assert.equal(blocked.allowed, false);
++  assert.equal(blocked.remaining, 0);
++  assert.equal(limiter.check('client', 1001).allowed, true);
++});
++
++test('rate limiter bounds the number of tracked clients', () => {
++  const limiter = new SlidingWindowRateLimiter(1, 1000, 2);
++  limiter.check('a', 0);
++  limiter.check('b', 0);
++  limiter.check('c', 0);
++  assert.equal(limiter.check('c', 1).allowed, false);
++  assert.equal(limiter.check('a', 1).allowed, true);
++});
++
++test('client key prefers the first trusted forwarded address', () => {
++  assert.equal(clientKey('10.0.0.1', '203.0.113.5, 10.0.0.1'), '203.0.113.5');
++  assert.equal(clientKey('10.0.0.1'), '10.0.0.1');
++});
++
++test('cache deduplicates concurrent loaders', async () => {
++  const cache = new TtlCache<string>(1000);
++  let calls = 0;
++  const loader = async () => {
++    calls += 1;
++    await new Promise((resolve) => setTimeout(resolve, 5));
++    return 'value';
++  };
++  const values = await Promise.all([
++    cache.getOrLoad('key', loader),
++    cache.getOrLoad('key', loader),
++    cache.getOrLoad('key', loader),
++  ]);
++  assert.deepEqual(values, ['value', 'value', 'value']);
++  assert.equal(calls, 1);
++});
+racing.ts[m
 [1m+++ b/src/providers/racing.ts[m
 [36m@@ -25,12 +25,10 @@[m [mexport class RacingProvider implements QobuzProvider {[m
        };[m
