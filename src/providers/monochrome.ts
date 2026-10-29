@@ -16,7 +16,7 @@ export class MonochromeProvider implements QobuzProvider {
   async getStream(trackId: string, _quality: Quality, _atmos: string): Promise<QobuzStream | null> {
     if (!/^[A-Za-z0-9_-]+$/.test(trackId)) return null;
     return {
-      url: new URL(`/track/${encodeURIComponent(trackId)}`, this.baseUrl()).toString(),
+      url: new URL(`track/${encodeURIComponent(trackId)}`, this.baseUrl().replace(/\/$/, '') + '/').toString(),
       format: 'flac', quality: 'LOSSLESS', manifest: 'none', encrypted: false,
     };
   }
@@ -24,7 +24,7 @@ export class MonochromeProvider implements QobuzProvider {
   private baseUrl(): string { return this.config.monochromeBaseUrl ?? 'https://tracks.monochrome.st'; }
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
-  const url = new URL(path, this.baseUrl());
+  const url = new URL(path.replace(/^\/+/, ''), this.baseUrl().replace(/\/$/, '') + '/');
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {

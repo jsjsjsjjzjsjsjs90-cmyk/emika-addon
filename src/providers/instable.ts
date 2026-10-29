@@ -39,8 +39,8 @@ export class InstableProvider implements QobuzProvider {
     };
     this.apiToken    = config.instableApiToken?.trim() || undefined;
     this.userAgent   = config.instableUserAgent?.trim() || defaultUserAgent();
-    this.timeoutMs   = Math.max(config.requestTimeoutMs, 8000);
-    this.maxAttempts = Math.max(config.upstreamRetries, 2);
+    this.timeoutMs   = config.requestTimeoutMs;
+    this.maxAttempts = config.upstreamRetries;
   }
 
   // ─── search ────────────────────────────────────────────────────────
@@ -150,6 +150,7 @@ export class InstableProvider implements QobuzProvider {
 // ─── helpers ──────────────────────────────────────────────────────────
 
 function extractTrackItems(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
   if (!isRecord(body)) return [];
   const data = isRecord(body.data) ? body.data : body;
 
@@ -161,7 +162,6 @@ function extractTrackItems(body: unknown): unknown[] {
   if (isRecord(body.tracks) && Array.isArray(body.tracks.items)) return body.tracks.items;
   // {tracks:[...]} or [...]
   if (Array.isArray(body.tracks)) return body.tracks;
-  if (Array.isArray(body)) return body;
   return [];
 }
 

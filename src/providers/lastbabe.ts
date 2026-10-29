@@ -74,11 +74,14 @@ export class LastBabeProvider implements QobuzProvider {
     const challenge = await challengeResponse.json() as { challenge?: unknown; difficulty?: unknown };
     if (typeof challenge.challenge !== 'string') throw new UpstreamError(502, 'LastBabe challenge was malformed');
     
-    const difficulty = typeof challenge.difficulty === 'number' && challenge.difficulty >= 1 && challenge.difficulty <= 8 ? challenge.difficulty : 4;
+    if (challenge.challenge.length > 4096) throw new UpstreamError(502, 'LastBabe challenge was too large');
+    const difficulty = typeof challenge.difficulty === 'number' && challenge.difficulty >= 1 && challenge.difficulty <= 6 ? challenge.difficulty : 4;
     const prefix = '0'.repeat(difficulty);
     
     let nonce = 0;
     let found: string | undefined;
+    const deadline = Date.now() + Math.max(this.config.requestTimeoutMs, 15_000);
+    const maxIterations = 10_000_000;
     
     // 🚀 OPTIMIZATION: แปลง challenge เป็น Buffer ล่วงหน้าเพื่อลด Overhead
     const challengeBase = Buffer.from(challenge.challenge, 'utf8');
@@ -87,6 +90,9 @@ export class LastBabeProvider implements QobuzProvider {
       // 🚀 OPTIMIZATION: เพิ่ม Batch Size เป็น 100,000 ต่อรอบ เพื่อลดการสลับ Context ของ Event Loop
       for (let i = 0; i < 100_000; i += 1) {
         nonce += 1;
+        if (nonce > maxIterations || Date.now() >= deadline) {
+          throw new UpstreamError(504, 'LastBabe proof-of-work timed out');
+        }
         const candidate = String(nonce);
         
         // 🚀 OPTIMIZATION: ใช้ Buffer.concat เร็วกว่าการใช้ String + String มาก

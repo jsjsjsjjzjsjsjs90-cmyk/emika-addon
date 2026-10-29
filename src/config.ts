@@ -7,6 +7,7 @@ export interface Config {
   host: string;
   port: number;
   requestTimeoutMs: number;
+  serverRequestTimeoutMs: number;
   upstreamRetries: number;
   cacheTtlMs: number;
   idSecret: string;
@@ -31,6 +32,10 @@ export interface Config {
   instableUserAgent?: string;
   enabledSources: Set<KnownSource>;
   sourceSearchTimeoutMs: number;
+  rateLimitWindowMs: number;
+  rateLimitMaxRequests: number;
+  rateLimitMaxKeys: number;
+  maxQueryLength: number;
 }
 
 const DEV_ID_SECRET = 'qobuz-bitchord-id-secret-dev-only';
@@ -65,7 +70,8 @@ export function loadConfig(): Config {
     'https://qobuz-dll.foreyou.workers.dev';
 
   const secretEnv = process.env.QOBUZ_ID_SECRET?.trim();
-  if (!secretEnv && process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'development') {
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+  if (!secretEnv && isProduction) {
     throw new Error('QOBUZ_ID_SECRET is required in production');
   }
 
@@ -73,6 +79,7 @@ export function loadConfig(): Config {
     host: process.env.HOST ?? '0.0.0.0',
     port: positiveInt('PORT', Number(process.env.SERVER_PORT) || 3000),
     requestTimeoutMs: positiveInt('REQUEST_TIMEOUT_MS', 6000),
+    serverRequestTimeoutMs: positiveInt('SERVER_REQUEST_TIMEOUT_MS', 10_000),
     upstreamRetries: positiveInt('UPSTREAM_RETRIES', 1),
     cacheTtlMs: positiveInt('CACHE_TTL_SECONDS', 300) * 1000,
     idSecret: secretEnv || DEV_ID_SECRET,
@@ -99,5 +106,9 @@ export function loadConfig(): Config {
     instableUserAgent: process.env.INSTABLE_USER_AGENT?.trim(),
     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),
     sourceSearchTimeoutMs: positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 3000),
+    rateLimitWindowMs: positiveInt('RATE_LIMIT_WINDOW_MS', 60_000),
+    rateLimitMaxRequests: positiveInt('RATE_LIMIT_MAX_REQUESTS', 60),
+    rateLimitMaxKeys: positiveInt('RATE_LIMIT_MAX_KEYS', 10_000),
+    maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
   };
 }

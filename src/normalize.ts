@@ -3,13 +3,14 @@ import type { PublicTrack, QobuzStream, QobuzTrack, Quality } from './types.js';
 
 const DEFAULT_ID_SECRET = 'qobuz-bitchord-id-secret-v1';
 
-export function publicId(track: QobuzTrack, secret = DEFAULT_ID_SECRET): string {
-  const encoded = Buffer.from(track.upstreamId, 'utf8').toString('base64url');
+export function publicId(track: QobuzTrack, secret = DEFAULT_ID_SECRET, namespace?: string): string {
+  const payload = namespace ? `${namespace}\u0000${track.upstreamId}` : track.upstreamId;
+  const encoded = Buffer.from(payload, 'utf8').toString('base64url');
   const signature = sign(encoded, secret);
   return `qobuz_${encoded}_${signature}`;
 }
 
-export function upstreamIdFromPublicId(id: string, secret = DEFAULT_ID_SECRET): string | undefined {
+export function upstreamIdFromPublicId(id: string, secret = DEFAULT_ID_SECRET, namespace?: string): string | undefined {
   const match = /^qobuz_([A-Za-z0-9_-]+)_([A-Za-z0-9_-]{16})$/.exec(id);
   if (!match) return undefined;
   const [encoded, supplied] = [match[1], match[2]];
@@ -18,15 +19,19 @@ export function upstreamIdFromPublicId(id: string, secret = DEFAULT_ID_SECRET): 
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return undefined;
   try {
-    const upstreamId = Buffer.from(encoded, 'base64url').toString('utf8');
-    return upstreamId.trim() || undefined;
+    const payload = Buffer.from(encoded, 'base64url').toString('utf8');
+    if (!namespace) return payload.trim() || undefined;
+    const separator = payload.indexOf('\u0000');
+    if (separator <= 0 || payload.slice(0, separator) !== namespace) return undefined;
+    return payload.slice(separator + 1).trim() || undefined;
   } catch { return undefined; }
 }
 
-export function normalizeTrack(track: QobuzTrack, secret?: string): PublicTrack {
+export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: string): PublicTrack {
   if (!track.upstreamId.trim() || !track.title.trim()) throw new Error('provider returned an unusable track');
+  const normalizedTrack = { ...track, upstreamId: track.upstreamId.trim(), title: track.title.trim() };
   return {
-    id: publicId(track, secret), title: track.title.trim(),
+    id: publicId(normalizedTrack, secret, namespace), title: normalizedTrack.title,
     artist: track.artist?.trim() || undefined, album: track.album?.trim() || undefined,
     duration: Number.isFinite(track.duration) && (track.duration as number) >= 0 ? track.duration : undefined,
     artworkURL: absoluteUrl(track.artworkURL), format: track.format?.toLowerCase(),

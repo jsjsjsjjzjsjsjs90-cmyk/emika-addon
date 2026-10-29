@@ -1,9 +1,8 @@
-```markdown
 # Emika Addon
 
 A playback-only [BitChord](https://bitcord.app) addon. Exposes a `manifest.json`, a `/search` endpoint, and a `/stream/:id` endpoint that returns a directly playable HTTPS rendition. No downloads, no accounts, no persistent storage.
 
-TypeScript · Node 20+ · Vercel Serverless or any Node host.
+TypeScript · Node 22–26 · Vercel Serverless or any Node host.
 
 ---
 
@@ -131,9 +130,14 @@ SOURCE_SEARCH_TIMEOUT_MS 3000 Per-source race timeout (ms)
 Optional
 
 Name Default Purpose
-REQUEST_TIMEOUT_MS 6000 Whole-request ceiling
+REQUEST_TIMEOUT_MS 6000 Upstream request timeout
 UPSTREAM_RETRIES 1 Retries on retryable upstream 5xx
 CACHE_TTL_SECONDS 300 Search cache TTL
+SERVER_REQUEST_TIMEOUT_MS 10000 Public route deadline
+RATE_LIMIT_WINDOW_MS 60000 Rate-limit window
+RATE_LIMIT_MAX_REQUESTS 60 Requests per client/window
+RATE_LIMIT_MAX_KEYS 10000 Maximum in-memory client buckets
+MAX_QUERY_LENGTH 200 Maximum search query length
 QOBUZ_PROVIDER multi multi \| qobuzdl \| http \| stub
 
 Per-source URLs
@@ -251,6 +255,4 @@ getStream must return a URL that passes streamResponse(): https:// only, encrypt
 
 License
 
-No license file included. Add one if you intend to share this. Upstream services are third-party and not affiliated with this addon; they can change or shut down at any time. QOBUZ_ENABLED_SOURCES is the kill switch — if an upstream dies, drop it from the list and redeploy.
-
-```
+Licensed under the GNU General Public License v3. Upstream services are third-party and not affiliated with this addon; they can change or shut down at any time. QOBUZ_ENABLED_SOURCES is the kill switch — if an upstream dies, drop it from the list and redeploy.

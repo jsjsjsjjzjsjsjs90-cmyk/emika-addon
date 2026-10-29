@@ -25,12 +25,10 @@ export class RacingProvider implements QobuzProvider {
       };
 
       for (const source of active) {
-        const timeout = new Promise<QobuzTrack[]>((_, rej) =>
-          setTimeout(
-            () => rej(new Error(`source ${source.name} timed out`)),
-            this.perSourceTimeoutMs,
-          ),
-        );
+        let timeoutHandle: NodeJS.Timeout | undefined;
+        const timeout = new Promise<QobuzTrack[]>((_, rej) => {
+          timeoutHandle = setTimeout(() => rej(new Error(`source ${source.name} timed out`)), this.perSourceTimeoutMs);
+        });
 
         Promise.race([source.provider.search(query, quality, atmos), timeout])
           .then((tracks) => {
@@ -51,6 +49,7 @@ export class RacingProvider implements QobuzProvider {
             lastError = err;
           })
           .finally(() => {
+            if (timeoutHandle) clearTimeout(timeoutHandle);
             pending -= 1;
             if (pending === 0 && !settled) {
               if (rejected === active.length) finish(() => reject(lastError));

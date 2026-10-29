@@ -5,26 +5,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     await app.ready();
 
-    // ดักจับ Path ที่ Vercel ส่งมา
-    if (req.url === '/api' || req.url === '/api/' || req.url === '/api/index.ts' || req.url === '/index') {
-      req.url = '/';
-    }
+    req.url = normalizeVercelPath(req.url);
 
     await new Promise<void>((resolve, reject) => {
       res.on('finish', resolve);
       res.on('error', reject);
       app.server.emit('request', req, res);
     });
-  } catch (error: any) {
-    console.error('FATAL FUNCTION ERROR:', error);
+  } catch (error: unknown) {
+    console.error('FATAL FUNCTION ERROR:', error instanceof Error ? error.message : 'unknown error');
     if (!res.headersSent) {
       res.statusCode = 500;
       res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ 
-        error: 'Function crashed', 
-        message: error.message || String(error),
-        stack: error.stack 
-      }));
+      res.end(JSON.stringify({ error: 'internal server error' }));
     }
   }
+}
+
+function normalizeVercelPath(url: string | undefined): string {
+  const value = url || '/';
+  if (value === '/api' || value === '/api/' || value === '/api/index.ts' || value === '/index') return '/';
+  if (value.startsWith('/api/')) return value.slice('/api'.length) || '/';
+  return value;
 }

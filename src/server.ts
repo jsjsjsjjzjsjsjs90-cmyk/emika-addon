@@ -5,11 +5,26 @@ import { TtlCache } from './cache.js';
 import { AppError, badRequest, notFound } from './errors.js';
 import { normalizeTrack, streamResponse, upstreamIdFromPublicId } from './normalize.js';
 import { createProvider, createSourceProvider, type IsolatedSource } from './providers/index.js';
+import { SlidingWindowRateLimiter, clientKey } from './rate-limit.js';
 import type { QobuzProvider, Quality, PublicTrack } from './types.js';
 
 const config = loadConfig();
 const app = Fastify({
   logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] },
+  requestTimeout: config.serverRequestTimeoutMs,
+});
+const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
+app.addHook('onRequest', async (request, reply) => {
+  const pathname = request.url.split('?', 1)[0];
+  if (!pathname.includes('/search') && !pathname.includes('/stream/') && pathname !== '/health/sources') return;
+  const result = limiter.check(clientKey(request.ip));
+  reply.header('X-RateLimit-Limit', result.limit);
+  reply.header('X-RateLimit-Remaining', result.remaining);
+  reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
+  if (!result.allowed) {
+    reply.header('Retry-After', Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000)));
+    return reply.code(429).send({ error: 'rate limit exceeded' });
+  }
 });
 
 const manifests = {
@@ -46,10 +61,10 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
       let timer: NodeJS.Timeout | undefined;
       try {
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('Timeout')), 8000);
+          timer = setTimeout(() => reject(new Error('operation timed out')), config.sourceSearchTimeoutMs);
         });
         const tracks = await Promise.race([
-          provider.search(testQuery, 'LOSSLESS', 'auto'),
+          withTimeout(provider.search(testQuery, 'LOSSLESS', 'auto'), config.sourceSearchTimeoutMs),
           timeoutPromise,
         ]);
         return {
@@ -63,7 +78,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
           source: sourceName,
           status: 'unhealthy' as const,
           latencyMs: Date.now() - started,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error && error.message === 'operation timed out' ? 'timeout' : 'upstream unavailable',
         };
       } finally {
         if (timer) clearTimeout(timer);
@@ -94,12 +109,12 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
 });
 
 registerAddon('/',    createProvider(config),                     manifests.root);
-registerAddon('/a',   createSourceProvider(config, 'qobuzdl'),    manifests.qobuzdl);
-registerAddon('/b',   createSourceProvider(config, 'lastbabe'),   manifests.lastbabe);
-registerAddon('/c',   createSourceProvider(config, 'monochrome'), manifests.monochrome);
-registerAddon('/d',   createSourceProvider(config, 'deezer'),     manifests.deezer);
-registerAddon('/e',   createSourceProvider(config, 'eljohnzc'),   manifests.eljohnzc);
-registerAddon('/f',   createSourceProvider(config, 'instable'),   manifests.instable);
+registerAddon('/a',   createSourceProvider(config, 'qobuzdl'),    manifests.qobuzdl, 'qobuzdl');
+registerAddon('/b',   createSourceProvider(config, 'lastbabe'),   manifests.lastbabe, 'lastbabe');
+registerAddon('/c',   createSourceProvider(config, 'monochrome'), manifests.monochrome, 'monochrome');
+registerAddon('/d',   createSourceProvider(config, 'deezer'),     manifests.deezer, 'deezer');
+registerAddon('/e',   createSourceProvider(config, 'eljohnzc'),   manifests.eljohnzc, 'eljohnzc');
+registerAddon('/f',   createSourceProvider(config, 'instable'),   manifests.instable, 'instable');
 
 function joinRoute(prefix: string, path: string): string {
   const head = prefix.replace(/\/+$/, '');
@@ -111,6 +126,7 @@ function registerAddon(
   prefix: string,
   provider: QobuzProvider,
   manifest: { id: string; name: string; version: string },
+  namespace?: string,
 ): void {
   const searchCache = new TtlCache<PublicTrack[]>(config.cacheTtlMs);
   const route = (path: string): string => joinRoute(prefix, path);
@@ -143,26 +159,21 @@ function registerAddon(
     async (request, reply) => {
       const query = request.query.q?.trim();
       if (!query) throw badRequest('q is required');
+      if (query.length > config.maxQueryLength) throw badRequest(`q must be at most ${config.maxQueryLength} characters`);
       const quality = parseQuality(request.query.quality);
-      const atmos = request.query.atmos ?? 'auto';
+      const atmos = parseAtmos(request.query.atmos);
       const key = `${query}\u0000${quality}\u0000${atmos}`;
 
-      const cached = searchCache.get(key);
-      if (cached) {
-        return reply
-          .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
-          .send({ tracks: cached });
-      }
-
       try {
-        const tracks = (await provider.search(query, quality, atmos)).flatMap((track) => {
-          try {
-            return [normalizeTrack(track, config.idSecret)];
-          } catch {
-            return [];
-          }
-        });
-        searchCache.set(key, tracks);
+        const tracks = await searchCache.getOrLoad(key, async () =>
+          (await withTimeout(provider.search(query, quality, atmos), config.serverRequestTimeoutMs)).flatMap((track) => {
+            try {
+              return [normalizeTrack(track, config.idSecret, namespace)];
+            } catch {
+              return [];
+            }
+          }),
+        );
         return reply
           .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
           .send({ tracks });
@@ -182,12 +193,12 @@ function registerAddon(
     route('/stream/:id'),
     async (request, reply) => {
       const quality = parseQuality(request.query.quality);
-      const atmos = request.query.atmos ?? 'auto';
+      const atmos = parseAtmos(request.query.atmos);
       const id = request.params.id;
       if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
-      const upstreamId = upstreamIdFromPublicId(id, config.idSecret);
+      const upstreamId = upstreamIdFromPublicId(id, config.idSecret, namespace);
       if (!upstreamId) throw notFound('track not available');
-      const stream = await provider.getStream(upstreamId, quality, atmos);
+      const stream = await withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs);
       if (!stream) throw notFound('track not available');
       try {
         return reply.send(streamResponse(stream, quality));
@@ -214,6 +225,17 @@ function parseQuality(value?: string): Quality {
   const normalized = (value ?? 'LOSSLESS').toUpperCase();
   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
   throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
+}
+function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
+  const normalized = (value ?? 'auto').toLowerCase();
+  if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
+  throw badRequest('atmos must be auto, on, or off');
+}
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('operation timed out')), timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
 }
 
 if (process.env.VERCEL !== '1') {
