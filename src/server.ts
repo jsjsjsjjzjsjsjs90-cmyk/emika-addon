@@ -13,10 +13,22 @@ const app = Fastify({
   logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] },
   requestTimeout: config.serverRequestTimeoutMs,
 });
-const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
+
+const limiter = new SlidingWindowRateLimiter(
+  config.rateLimitMaxRequests,
+  config.rateLimitWindowMs,
+  config.rateLimitMaxKeys,
+);
+
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
-  if (!pathname.includes('/search') && !pathname.includes('/stream/') && pathname !== '/health/sources') return;
+  if (
+    !pathname.includes('/search') &&
+    !pathname.includes('/stream/') &&
+    pathname !== '/health/sources'
+  ) {
+    return;
+  }
   const result = limiter.check(clientKey(request.ip));
   reply.header('X-RateLimit-Limit', result.limit);
   reply.header('X-RateLimit-Remaining', result.remaining);
@@ -28,19 +40,18 @@ app.addHook('onRequest', async (request, reply) => {
 });
 
 const manifests = {
-  root:       { id: 'com.bitchord.qobuz',            name: 'Emika addon',              version: '1.0.0' },
-  qobuzdl:    { id: 'com.bitchord.qobuz.qobuzdl',    name: 'Qobuz-DL',                 version: '1.0.0' },
-  lastbabe:   { id: 'com.bitchord.qobuz.lastbabe',   name: 'LastBabe',                 version: '1.0.0' },
-  monochrome: { id: 'com.bitchord.qobuz.monochrome', name: 'Monochrome Lossless',      version: '1.0.0' },
-  deezer:     { id: 'com.bitchord.qobuz.deezer',     name: 'Deezer Fallback',          version: '1.0.0' },
-  eljohnzc:   { id: 'com.bitchord.qobuz.eljohnzc',   name: 'Eljohnzc Lossless',        version: '1.0.0' },
-  instable:   { id: 'com.bitchord.qobuz.instable',   name: 'Instable Lossless',        version: '1.0.0' },
+  root:       { id: 'com.bitchord.qobuz',            name: 'Emika addon',         version: '1.0.0' },
+  qobuzdl:    { id: 'com.bitchord.qobuz.qobuzdl',    name: 'Qobuz-DL',            version: '1.0.0' },
+  lastbabe:   { id: 'com.bitchord.qobuz.lastbabe',   name: 'LastBabe',            version: '1.0.0' },
+  monochrome: { id: 'com.bitchord.qobuz.monochrome', name: 'Monochrome Lossless', version: '1.0.0' },
+  deezer:     { id: 'com.bitchord.qobuz.deezer',     name: 'Deezer Fallback',     version: '1.0.0' },
+  eljohnzc:   { id: 'com.bitchord.qobuz.eljohnzc',   name: 'Eljohnzc Lossless',   version: '1.0.0' },
+  instable:   { id: 'com.bitchord.qobuz.instable',   name: 'Instable Lossless',   version: '1.0.0' },
 } as const;
 
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
 app.get('/health', async () => ({ ok: true }));
 
-// ★ แก้จุดที่ 1: STUB_SOURCES ว่างเปล่า — ไม่มี eljohnzc อีกต่อไป
 const STUB_SOURCES: ReadonlySet<IsolatedSource> = new Set<IsolatedSource>([]);
 
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
@@ -54,7 +65,6 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
       if (STUB_SOURCES.has(sourceName)) {
         return { source: sourceName, status: 'not_implemented' as const, latencyMs: 0, resultCount: 0 };
       }
-      // ★ แก้จุดที่ 2: ลบ Exclude<IsolatedSource, 'eljohnzc'> ออก
       if (!config.enabledSources.has(sourceName)) {
         return { source: sourceName, status: 'disabled_by_config' as const, latencyMs: 0, resultCount: 0 };
       }
@@ -110,13 +120,13 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   };
 });
 
-registerAddon('/',    createProvider(config),                     manifests.root);
-registerAddon('/a',   createSourceProvider(config, 'qobuzdl'),    manifests.qobuzdl, 'qobuzdl');
-registerAddon('/b',   createSourceProvider(config, 'lastbabe'),   manifests.lastbabe, 'lastbabe');
-registerAddon('/c',   createSourceProvider(config, 'monochrome'), manifests.monochrome, 'monochrome');
-registerAddon('/d',   createSourceProvider(config, 'deezer'),     manifests.deezer, 'deezer');
-registerAddon('/e',   createSourceProvider(config, 'eljohnzc'),   manifests.eljohnzc, 'eljohnzc');
-registerAddon('/f',   createSourceProvider(config, 'instable'),   manifests.instable, 'instable');
+registerAddon('/',  createProvider(config),                     manifests.root);
+registerAddon('/a', createSourceProvider(config, 'qobuzdl'),    manifests.qobuzdl,    'qobuzdl');
+registerAddon('/b', createSourceProvider(config, 'lastbabe'),   manifests.lastbabe,   'lastbabe');
+registerAddon('/c', createSourceProvider(config, 'monochrome'), manifests.monochrome, 'monochrome');
+registerAddon('/d', createSourceProvider(config, 'deezer'),     manifests.deezer,     'deezer');
+registerAddon('/e', createSourceProvider(config, 'eljohnzc'),   manifests.eljohnzc,   'eljohnzc');
+registerAddon('/f', createSourceProvider(config, 'instable'),   manifests.instable,   'instable');
 
 function joinRoute(prefix: string, path: string): string {
   const head = prefix.replace(/\/+$/, '');
@@ -161,7 +171,9 @@ function registerAddon(
     async (request, reply) => {
       const query = request.query.q?.trim();
       if (!query) throw badRequest('q is required');
-      if (query.length > config.maxQueryLength) throw badRequest(`q must be at most ${config.maxQueryLength} characters`);
+      if (query.length > config.maxQueryLength) {
+        throw badRequest(`q must be at most ${config.maxQueryLength} characters`);
+      }
       const quality = parseQuality(request.query.quality);
       const atmos = parseAtmos(request.query.atmos);
       const key = `${query}\u0000${quality}\u0000${atmos}`;
@@ -220,13 +232,44 @@ app.setErrorHandler((error, _request, reply) => {
       : typeof candidate.status === 'number'
         ? candidate.status
         : 500;
-  return reply.code(status).send({ error: status >= 500 ? 'upstream service unavailable' : 'request failed' });
+  return reply.code(status).send({
+    error: status >= 500 ? 'upstream service unavailable' : 'request failed',
+  });
 });
 
 function parseQuality(value?: string): Quality {
   const normalized = (value ?? 'LOSSLESS').toUpperCase();
   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
   throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
+}
+
+function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
+  const normalized = (value ?? 'auto').toLowerCase();
+  if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
+  throw badRequest('atmos must be auto, on, or off');
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('operation timed out')), timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+if (process.env.VERCEL !== '1') {
+  app
+    .listen({ host: config.host, port: config.port })
+    .then(() => {
+      app.log.info({ host: config.host, port: config.port, provider: config.provider }, 'BitChord addon listening');
+    })
+    .catch((error) => {
+      app.log.error(error);
+      process.exit(1);
+    });
+}
+
+export default app;
+export { app, parseQuality };H, or LOW');
 }
 function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
   const normalized = (value ?? 'auto').toLowerCase();
