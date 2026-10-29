@@ -23,6 +23,7 @@ function buildFor(config: Config, source: IsolatedSource): QobuzProvider | undef
     case 'monochrome': return new MonochromeProvider(config);
     case 'deezer':     return new RemoteAddonProvider(config);
     case 'instable':   return new InstableProvider(config);
+    case 'eljohnzc':   return new eljohnzcProvider(config);
   }
 }
 
