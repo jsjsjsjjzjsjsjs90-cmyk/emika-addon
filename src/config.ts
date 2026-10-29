@@ -1,6 +1,6 @@
-export type KnownSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'instable' | 'eljohnzc';
+export type KnownSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'instable';
 const KNOWN_SOURCES: readonly KnownSource[] = [
-  'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'instable', 'eljohnzc',
+  'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'instable',
 ];
 
 export interface Config {
