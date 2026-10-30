@@ -216,14 +216,24 @@ function toStream(body: unknown, requested: Quality): QobuzStream {
     (typeof data.format   === 'string' && data.format)   ||
     undefined;
   const format = mime && mime.includes('/') ? mime.split('/').pop() : mime;
+  const normalizedFormat = format?.toLowerCase();
 
   return {
     url,
-    format: format?.toLowerCase(),
+    format: normalizedFormat,
+    codec: normalizedFormat,
+    container: normalizedFormat === 'flac' ? 'flac' : undefined,
     quality: requested,
     manifest: 'none',
     encrypted: false,
+    sampleRate: numberValue(data.sampleRate),
+    bitDepth: numberValue(data.bitDepth),
+    bitrate: numberValue(data.bitrate),
   };
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function normalizePath(p: string): string {

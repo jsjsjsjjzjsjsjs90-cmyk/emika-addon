@@ -44,9 +44,14 @@ export class RemoteAddonProvider implements QobuzProvider {
       if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
       return {
         url: body.url, format: typeof body.format === 'string' ? body.format : undefined,
+        codec: typeof body.codec === 'string' ? body.codec : undefined,
+        container: typeof body.container === 'string' ? body.container : undefined,
         quality: typeof body.quality === 'string' ? body.quality : quality,
         manifest: body.manifest === 'hls' || body.manifest === 'dash' ? body.manifest : 'none',
         encrypted: body.encrypted === true,
+        sampleRate: numberValue(body.sampleRate),
+        bitDepth: numberValue(body.bitDepth),
+        bitrate: numberValue(body.bitrate),
       };
     } catch (error) {
       return null; // Silent failure to protect the server
@@ -123,3 +128,7 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
 }
 
 function isRecord(value: unknown): value is RecordValue { return typeof value === 'object' && value !== null; }
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
