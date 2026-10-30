@@ -7,6 +7,7 @@ export interface QobuzTrack {
   album?: string;
   duration?: number;
   artworkURL?: string;
+  streamURL?: string;
   format?: string;
   audioQuality?: string;
   audioModes?: string[];

@@ -53,6 +53,35 @@ test('remote addon preserves a base path and sends the BitChord client identity'
   }
 });
 
+test('remote addon accepts a manifest URL and uses a direct streamURL fallback', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    requests.push(String(input));
+    return new Response(JSON.stringify({
+      tracks: [{
+        id: 'direct-1', title: 'Direct Track',
+        streamURL: 'https://media.example.test/direct-1.flac',
+        format: 'flac', audioQuality: 'LOSSLESS',
+      }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    const provider = new RemoteAddonProvider(config(), 'https://remote.example.test/u/token/manifest.json');
+    const tracks = await provider.search('direct', 'LOSSLESS', 'auto');
+    const stream = await provider.getStream(tracks[0]!.upstreamId, 'LOSSLESS', 'auto');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0], 'https://remote.example.test/u/token/search?q=direct&quality=LOSSLESS&atmos=auto');
+    assert.deepEqual(stream, {
+      url: 'https://media.example.test/direct-1.flac',
+      format: 'flac', quality: 'LOSSLESS', manifest: 'none', encrypted: false,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('remote addon rejects non-HTTPS stream responses', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({ url: 'http://insecure.example.test/audio' }), {

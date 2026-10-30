@@ -34,7 +34,7 @@ export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: s
     id: publicId(normalizedTrack, secret, namespace), title: normalizedTrack.title,
     artist: track.artist?.trim() || undefined, album: track.album?.trim() || undefined,
     duration: Number.isFinite(track.duration) && (track.duration as number) >= 0 ? track.duration : undefined,
-    artworkURL: absoluteUrl(track.artworkURL), format: track.format?.toLowerCase(),
+    artworkURL: absoluteUrl(track.artworkURL), streamURL: absoluteUrl(track.streamURL), format: track.format?.toLowerCase(),
     audioQuality: track.audioQuality?.trim(), audioModes: track.audioModes, atmos: track.atmos,
   };
 }
