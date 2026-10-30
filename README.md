@@ -224,9 +224,9 @@ Env var isn't set or wasn't applied to this deployment. Env vars only take effec
 
 Route-joining is mis-registering prefixed routes. joinRoute() must trim trailing slashes from prefix before concatenation. If you replace server.ts, keep that helper.
 
-/search takes 6 seconds and returns 502
+/search takes too long or returns 502
 
-One enabled source is hung and ignoring the per-source timeout. Confirm with /health/sources — the slow source shows unhealthy with Timeout. Either remove it from QOBUZ_ENABLED_SOURCES or raise SOURCE_SEARCH_TIMEOUT_MS (keep below REQUEST_TIMEOUT_MS).
+One enabled source is slow or unavailable. Confirm with /health/sources — the source will show `unhealthy`/`timeout` for search or `stream_unavailable` when only playback fails. Remove it from QOBUZ_ENABLED_SOURCES or lower the timeout; SOURCE_SEARCH_TIMEOUT_MS is capped at REQUEST_TIMEOUT_MS.
 
 /search returns {"tracks":[]} but /health/sources shows healthy
 
