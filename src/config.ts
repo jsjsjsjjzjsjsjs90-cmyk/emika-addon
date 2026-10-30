@@ -49,7 +49,7 @@ const positiveInt = (name: string, fallback: number): number => {
 };
 
 function parseEnabledSources(raw?: string): Set<KnownSource> {
-  const trimmed = (raw ?? 'qobuzdl,eljohnzc,instable').trim();
+  const trimmed = (raw ?? 'eljohnzc,instable').trim();
   const parts = trimmed
     .split(',')
     .map((s) => s.trim().toLowerCase())
