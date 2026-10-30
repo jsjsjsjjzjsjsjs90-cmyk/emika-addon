@@ -39,7 +39,15 @@ const manifests = {
 } as const;
 
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
-app.get('/health', async () => ({ ok: true }));
+app.get('/health', async () => ({
+  ok: true,
+  timeouts: {
+    sourceSearchMs: config.sourceSearchTimeoutMs,
+    sourceHealthMs: config.sourceHealthTimeoutMs,
+    upstreamMs: config.requestTimeoutMs,
+    requestMs: config.serverRequestTimeoutMs,
+  },
+}));
 
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   const testQuery = normalizeHealthQuery(request.query.q, config.maxQueryLength);
