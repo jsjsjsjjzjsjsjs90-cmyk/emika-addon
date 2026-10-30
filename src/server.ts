@@ -49,6 +49,7 @@ app.get('/health', async () => ({
     upstreamMs: config.requestTimeoutMs,
     requestMs: config.serverRequestTimeoutMs,
   },
+  allowDownloads: config.allowDownloads,
 }));
 
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
@@ -195,7 +196,7 @@ function registerAddon(
       .send({
         ...manifest,
         resources: ['search', 'stream'],
-        allowDownloads: 0,
+        allowDownloads: config.allowDownloads ? 1 : 0,
         checkValidLossless: 0,
         settings: [
           {

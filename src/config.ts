@@ -37,6 +37,7 @@ export interface Config {
   rateLimitMaxRequests: number;
   rateLimitMaxKeys: number;
   maxQueryLength: number;
+  allowDownloads: boolean;
 }
 
 const DEV_ID_SECRET = 'qobuz-bitchord-id-secret-dev-only';
@@ -117,5 +118,6 @@ export function loadConfig(): Config {
     rateLimitMaxRequests: positiveInt('RATE_LIMIT_MAX_REQUESTS', 60),
     rateLimitMaxKeys: positiveInt('RATE_LIMIT_MAX_KEYS', 10_000),
     maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
+    allowDownloads: (process.env.EMIKA_ALLOW_DOWNLOADS ?? '').trim().toLowerCase() === 'true',
   };
 }

@@ -1,6 +1,6 @@
 # Emika Addon
 
-A playback-only [BitChord](https://bitcord.app) addon. Exposes a `manifest.json`, a `/search` endpoint, and a `/stream/:id` endpoint that returns a directly playable HTTPS rendition. No downloads, no accounts, no persistent storage.
+A [BitChord](https://bitcord.app) addon. Exposes a `manifest.json`, a `/search` endpoint, and a `/stream/:id` endpoint that returns a directly playable HTTPS rendition. Downloads are disabled by default and can be enabled only for sources the operator is authorized to save.
 
 TypeScript · Node 22–26 · Vercel Serverless or any Node host.
 
@@ -139,6 +139,7 @@ RATE_LIMIT_WINDOW_MS 60000 Rate-limit window
 RATE_LIMIT_MAX_REQUESTS 60 Requests per client/window
 RATE_LIMIT_MAX_KEYS 10000 Maximum in-memory client buckets
 MAX_QUERY_LENGTH 200 Maximum search query length
+EMIKA_ALLOW_DOWNLOADS false Advertise download capability only for authorized sources
 QOBUZ_PROVIDER multi multi \| qobuzdl \| http \| stub
 
 Per-source URLs

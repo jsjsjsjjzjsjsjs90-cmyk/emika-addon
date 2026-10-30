@@ -23,6 +23,7 @@ function config(overrides: Partial<Config> = {}): Config {
     rateLimitMaxRequests: 10,
     rateLimitMaxKeys: 100,
     maxQueryLength: 200,
+    allowDownloads: false,
     deezerBaseUrl: 'https://fallback.example.test',
     ...overrides,
   };
