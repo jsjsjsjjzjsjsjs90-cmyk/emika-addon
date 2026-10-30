@@ -38,6 +38,7 @@ export interface Config {
   rateLimitMaxKeys: number;
   maxQueryLength: number;
   allowDownloads: boolean;
+  downloadSources: Set<KnownSource>;
 }
 
 const DEV_ID_SECRET = 'qobuz-bitchord-id-secret-dev-only';
@@ -51,7 +52,7 @@ const positiveInt = (name: string, fallback: number): number => {
 };
 
 function parseEnabledSources(raw?: string): Set<KnownSource> {
-  const trimmed = (raw ?? 'eljohnzc,instable').trim();
+  const trimmed = (raw ?? 'instable').trim();
   const parts = trimmed
     .split(',')
     .map((s) => s.trim().toLowerCase())
@@ -78,6 +79,7 @@ export function loadConfig(): Config {
   }
   const requestTimeoutMs = positiveInt('REQUEST_TIMEOUT_MS', 6000);
   const serverRequestTimeoutMs = positiveInt('SERVER_REQUEST_TIMEOUT_MS', 10_000);
+  const sourceSearchTimeoutMs = Math.min(positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 3000), requestTimeoutMs);
 
   return {
     host: process.env.HOST ?? '0.0.0.0',
@@ -109,7 +111,7 @@ export function loadConfig(): Config {
     instableApiToken: process.env.INSTABLE_API_TOKEN?.trim(),
     instableUserAgent: process.env.INSTABLE_USER_AGENT?.trim(),
     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),
-    sourceSearchTimeoutMs: positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 3000),
+    sourceSearchTimeoutMs,
     sourceHealthTimeoutMs: positiveInt(
       'SOURCE_HEALTH_TIMEOUT_MS',
       Math.min(requestTimeoutMs, serverRequestTimeoutMs),
@@ -119,5 +121,6 @@ export function loadConfig(): Config {
     rateLimitMaxKeys: positiveInt('RATE_LIMIT_MAX_KEYS', 10_000),
     maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
     allowDownloads: (process.env.EMIKA_ALLOW_DOWNLOADS ?? '').trim().toLowerCase() === 'true',
+    downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),
   };
 }

@@ -49,7 +49,8 @@ app.get('/health', async () => ({
     upstreamMs: config.requestTimeoutMs,
     requestMs: config.serverRequestTimeoutMs,
   },
-  allowDownloads: config.allowDownloads,
+  allowDownloads: manifestAllowsDownloads(),
+  downloadSources: [...config.downloadSources],
 }));
 
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
@@ -106,9 +107,14 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
               remainingMs,
             );
             streamLatencyMs += Date.now() - streamStarted;
-            if (stream?.url) {
-              streamHealthy = true;
-              break;
+            if (stream) {
+              try {
+                streamResponse(stream, 'LOSSLESS');
+                streamHealthy = true;
+                break;
+              } catch {
+                // Keep probing another search result from the same source.
+              }
             }
           } catch {
             streamLatencyMs += Date.now() - streamStarted;
@@ -196,7 +202,7 @@ function registerAddon(
       .send({
         ...manifest,
         resources: ['search', 'stream'],
-        allowDownloads: config.allowDownloads ? 1 : 0,
+        allowDownloads: manifestAllowsDownloads(namespace) ? 1 : 0,
         checkValidLossless: 0,
         settings: [
           {
@@ -266,6 +272,12 @@ function registerAddon(
       }
     },
   );
+}
+
+function manifestAllowsDownloads(namespace?: string): boolean {
+  if (!config.allowDownloads || config.downloadSources.size === 0) return false;
+  if (namespace) return config.downloadSources.has(namespace as IsolatedSource);
+  return [...config.enabledSources].every((source) => config.downloadSources.has(source));
 }
 
 app.setErrorHandler((error, _request, reply) => {

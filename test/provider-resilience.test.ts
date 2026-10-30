@@ -24,6 +24,7 @@ function config(overrides: Partial<Config> = {}): Config {
     rateLimitMaxKeys: 100,
     maxQueryLength: 200,
     allowDownloads: false,
+    downloadSources: new Set(),
     deezerBaseUrl: 'https://fallback.example.test',
     ...overrides,
   };
@@ -123,6 +124,16 @@ test('racing provider keeps the winning source namespace for stream resolution',
     url: 'https://cdn.example.test/fast.flac',
     manifest: 'none',
   });
+});
+
+test('racing provider ignores unusable tracks and falls back to another source', async () => {
+  const provider = new RacingProvider([
+    { name: 'bad', provider: { async search() { return [{ upstreamId: '', title: '' }]; }, async getStream() { return null; } } },
+    { name: 'good', provider: { async search() { return [{ upstreamId: 'ok', title: 'Usable' }]; }, async getStream() { return null; } } },
+  ], 100);
+  assert.deepEqual(await provider.search('x', 'LOSSLESS', 'auto'), [
+    { upstreamId: 'good:ok', title: 'Usable' },
+  ]);
 });
 
 test('health query is bounded before fan-out to upstream sources', () => {

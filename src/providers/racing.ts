@@ -33,10 +33,11 @@ export class RacingProvider implements QobuzProvider {
         Promise.race([source.provider.search(query, quality, atmos), timeout])
           .then((tracks) => {
             if (settled) return;
-            if (tracks.length > 0) {
+            const usableTracks = tracks.filter((track) => track.upstreamId.trim() && track.title.trim());
+            if (usableTracks.length > 0) {
               finish(() =>
                 resolve(
-                  tracks.map((track) => ({
+                  usableTracks.map((track) => ({
                     ...track,
                     upstreamId: `${source.name}:${track.upstreamId}`,
                   })),

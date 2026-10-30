@@ -20,12 +20,12 @@ Six upstream adapters. Which ones are live is controlled by `QOBUZ_ENABLED_SOURC
 
 | Name | Adapter | Status |
 |---|---|---|
-| `qobuzdl` | Qobuz-DL Worker | Working — search + stream |
-| `instable` | Instable | Working — search + stream |
-| `lastbabe` | LastBabe (mint-on-demand) | Implemented, disabled by default |
-| `monochrome` | Monochrome | Implemented, disabled by default |
-| `deezer` | Remote addon proxy | Implemented, disabled by default |
-| `eljohnzc` | gglos personal addon | Working — search + stream; disable if unavailable |
+| `qobuzdl` | Qobuz-DL Worker | Implemented, opt-in |
+| `instable` | Instable | Default source; verify upstream health |
+| `lastbabe` | LastBabe (mint-on-demand) | Implemented, opt-in; upstream search may be unavailable |
+| `monochrome` | Monochrome | Implemented, opt-in |
+| `deezer` | Remote addon proxy | Search may work while stream is unavailable; opt-in |
+| `eljohnzc` | gglos personal addon | Implemented, currently unavailable in live checks |
 
 When multiple sources are enabled, `/search` races them and resolves with the first non-empty result. Each source has its own timeout (`SOURCE_SEARCH_TIMEOUT_MS`), so a hung provider cannot block the whole request.
 
@@ -79,12 +79,13 @@ GET /health/sources?q=<optional test query>
 
 Fan-out health check. Queries each enabled source with a real search.
 
-Per-source status:
+Per-source status (search and stream are both checked):
 
 Status Meaning
-healthy Returned at least one track
+healthy Returned at least one track and at least one playable stream
+stream_unavailable Search returned tracks but no playable stream was found
 no_results Responded, empty
-unhealthy Threw or timed out
+unhealthy Search threw or timed out
 disabled_by_config Not in QOBUZ_ENABLED_SOURCES
 not_implemented No adapter exists
 
@@ -124,7 +125,7 @@ The addon refuses to boot in production if this is missing. If you lose it, exis
 Recommended
 
 Name Default Purpose
-QOBUZ_ENABLED_SOURCES qobuzdl,eljohnzc,instable Comma-separated live sources
+QOBUZ_ENABLED_SOURCES instable Comma-separated live sources
 SOURCE_SEARCH_TIMEOUT_MS 3000 Per-source race timeout (ms)
 SOURCE_HEALTH_TIMEOUT_MS 6000 Per-source health diagnostic timeout (ms)
 
@@ -139,7 +140,8 @@ RATE_LIMIT_WINDOW_MS 60000 Rate-limit window
 RATE_LIMIT_MAX_REQUESTS 60 Requests per client/window
 RATE_LIMIT_MAX_KEYS 10000 Maximum in-memory client buckets
 MAX_QUERY_LENGTH 200 Maximum search query length
-EMIKA_ALLOW_DOWNLOADS false Advertise download capability only for authorized sources
+EMIKA_ALLOW_DOWNLOADS false Master switch for download capability
+EMIKA_DOWNLOAD_SOURCES empty Comma-separated per-source download allowlist
 QOBUZ_PROVIDER multi multi \| qobuzdl \| http \| stub
 
 Per-source URLs
@@ -195,7 +197,7 @@ Deploy to Vercel
 2. In Settings → Environment Variables, add these three for Production, Preview, and Development:
    ```
    QOBUZ_ID_SECRET          = <your generated 48-byte string>
-   QOBUZ_ENABLED_SOURCES    = qobuzdl,eljohnzc,instable
+   QOBUZ_ENABLED_SOURCES    = instable
    SOURCE_SEARCH_TIMEOUT_MS = 3000
    ```
 3. Deploy. Then verify:
@@ -206,7 +208,9 @@ Deploy to Vercel
      | jq '{overallStatus, providers: [.providers[] | {source, status}]}'
    ```
    Expect 200 for both endpoints and all_systems_operational or degraded_but_functional.
-4. In BitChord → Settings → Sources → Add an addon, paste https://<your-deployment> (no trailing slash). BitChord will request /manifest.json and register it as streaming-only.
+4. In BitChord → Settings → Sources → Add an addon, paste https://<your-deployment> (no trailing slash). BitChord will request /manifest.json and use the download permission advertised by `EMIKA_ALLOW_DOWNLOADS`.
+
+   Keep `EMIKA_ALLOW_DOWNLOADS=false` unless downloads are authorized. To enable only Instable, set both `EMIKA_ALLOW_DOWNLOADS=true` and `EMIKA_DOWNLOAD_SOURCES=instable`; the aggregate root advertises downloads only when every enabled source is on the allowlist.
 
 ---
 
