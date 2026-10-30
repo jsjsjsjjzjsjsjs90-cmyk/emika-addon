@@ -25,7 +25,7 @@ Six upstream adapters. Which ones are live is controlled by `QOBUZ_ENABLED_SOURC
 | `lastbabe` | LastBabe (mint-on-demand) | Implemented, disabled by default |
 | `monochrome` | Monochrome | Implemented, disabled by default |
 | `deezer` | Remote addon proxy | Implemented, disabled by default |
-| `eljohnzc` | gglos personal addon | Working — search + stream |
+| `eljohnzc` | gglos personal addon | Working — search + stream; disable if unavailable |
 
 When multiple sources are enabled, `/search` races them and resolves with the first non-empty result. Each source has its own timeout (`SOURCE_SEARCH_TIMEOUT_MS`), so a hung provider cannot block the whole request.
 
@@ -150,6 +150,7 @@ LASTBABE_BASE_URL=https://lastbabe.velixir.run
 MONOCHROME_BASE_URL=https://tracks.monochrome.st
 DEEZER_BASE_URL=https://bitchord-hires-addon.vercel.app
 INSTABLE_BASE_URL=https://instable.arcod.xyz
+ELJOHNZC_BASE_URL=https://gglos.geisselgottes.cfd/u/eyJ2IjoxLCJzcmMiOlsicSJdLCJxIjpbIkxPU1NMRVNTIiwiSElHSCIsIkxPVyJdLCJhdG1vcyI6Im9mZiIsImhpZGUiOnsibWluU2VjIjozMH19
 ```
 
 See .env.example for the complete list including Instable overrides.
@@ -192,7 +193,7 @@ Deploy to Vercel
 2. In Settings → Environment Variables, add these three for Production, Preview, and Development:
    ```
    QOBUZ_ID_SECRET          = <your generated 48-byte string>
-   QOBUZ_ENABLED_SOURCES    = qobuzdl,instable
+   QOBUZ_ENABLED_SOURCES    = qobuzdl,eljohnzc,instable
    SOURCE_SEARCH_TIMEOUT_MS = 3000
    ```
 3. Deploy. Then verify:

@@ -6,6 +6,7 @@ import { AppError, badRequest, notFound } from './errors.js';
 import { normalizeTrack, streamResponse, upstreamIdFromPublicId } from './normalize.js';
 import { createProvider, createSourceProvider, type IsolatedSource } from './providers/index.js';
 import { SlidingWindowRateLimiter, clientKey } from './rate-limit.js';
+import { normalizeHealthQuery } from './query.js';
 import type { QobuzProvider, Quality, PublicTrack } from './types.js';
 
 const config = loadConfig();
@@ -41,7 +42,7 @@ app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').s
 app.get('/health', async () => ({ ok: true }));
 
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
-  const testQuery = request.query.q || 'love';
+  const testQuery = normalizeHealthQuery(request.query.q, config.maxQueryLength);
   const sourceNames: IsolatedSource[] = [
     'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable',
   ];
