@@ -54,15 +54,11 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
       }
       const provider = createSourceProvider(config, sourceName);
       const started = Date.now();
-      let timer: NodeJS.Timeout | undefined;
       try {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('operation timed out')), config.sourceSearchTimeoutMs);
-        });
-        const tracks = await Promise.race([
-          withTimeout(provider.search(testQuery, 'LOSSLESS', 'auto'), config.sourceSearchTimeoutMs),
-          timeoutPromise,
-        ]);
+        const tracks = await withTimeout(
+          provider.search(testQuery, 'LOSSLESS', 'auto'),
+          config.sourceHealthTimeoutMs,
+        );
         return {
           source: sourceName,
           status: tracks.length > 0 ? ('healthy' as const) : ('no_results' as const),
@@ -76,8 +72,6 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
           latencyMs: Date.now() - started,
           error: error instanceof Error && error.message === 'operation timed out' ? 'timeout' : 'upstream unavailable',
         };
-      } finally {
-        if (timer) clearTimeout(timer);
       }
     }),
   );

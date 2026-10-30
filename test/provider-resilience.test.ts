@@ -18,6 +18,7 @@ function config(overrides: Partial<Config> = {}): Config {
     provider: 'multi',
     enabledSources: new Set(),
     sourceSearchTimeoutMs: 100,
+    sourceHealthTimeoutMs: 200,
     rateLimitWindowMs: 1000,
     rateLimitMaxRequests: 10,
     rateLimitMaxKeys: 100,

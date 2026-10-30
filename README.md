@@ -126,6 +126,7 @@ Recommended
 Name Default Purpose
 QOBUZ_ENABLED_SOURCES qobuzdl,eljohnzc,instable Comma-separated live sources
 SOURCE_SEARCH_TIMEOUT_MS 3000 Per-source race timeout (ms)
+SOURCE_HEALTH_TIMEOUT_MS 6000 Per-source health diagnostic timeout (ms)
 
 Optional
 
