@@ -1,6 +1,6 @@
-export type KnownSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'instable';
+export type KnownSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'eljohnzc' | 'instable';
 const KNOWN_SOURCES: readonly KnownSource[] = [
-  'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'instable',
+  'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable',
 ];
 
 export interface Config {
@@ -49,7 +49,7 @@ const positiveInt = (name: string, fallback: number): number => {
 };
 
 function parseEnabledSources(raw?: string): Set<KnownSource> {
-  const trimmed = (raw ?? 'qobuzdl,instable').trim();
+  const trimmed = (raw ?? 'qobuzdl,eljohnzc,instable').trim();
   const parts = trimmed
     .split(',')
     .map((s) => s.trim().toLowerCase())
@@ -93,7 +93,7 @@ export function loadConfig(): Config {
     deezerBaseUrl: process.env.DEEZER_BASE_URL?.trim() || 'https://bitchord-hires-addon.vercel.app',
     eljohnzcBaseUrl:
       process.env.ELJOHNZC_BASE_URL?.trim() ||
-      'https://eljohnzcaddon.velixir.run/c57e7b0ef2031b2f1fcd',
+      'https://gglos.geisselgottes.cfd/u/eyJ2IjoxLCJzcmMiOlsicSJdLCJxIjpbIkxPU1NMRVNTIiwiSElHSCIsIkxPVyJdLCJhdG1vcyI6Im9mZiIsImhpZGUiOnsibWluU2VjIjozMH19',
     instableBaseUrl: process.env.INSTABLE_BASE_URL?.trim() || 'https://instable.arcod.xyz',
     instableSearchPath: process.env.INSTABLE_SEARCH_PATH?.trim(),
     instableStreamPath: process.env.INSTABLE_STREAM_PATH?.trim(),

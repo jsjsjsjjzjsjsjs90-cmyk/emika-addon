@@ -40,8 +40,6 @@ const manifests = {
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
 app.get('/health', async () => ({ ok: true }));
 
-const STUB_SOURCES: ReadonlySet<IsolatedSource> = new Set<IsolatedSource>(['eljohnzc']);
-
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   const testQuery = request.query.q || 'love';
   const sourceNames: IsolatedSource[] = [
@@ -50,10 +48,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
 
   const results = await Promise.all(
     sourceNames.map(async (sourceName) => {
-      if (STUB_SOURCES.has(sourceName)) {
-        return { source: sourceName, status: 'not_implemented' as const, latencyMs: 0, resultCount: 0 };
-      }
-      if (!config.enabledSources.has(sourceName as Exclude<IsolatedSource, 'eljohnzc'>)) {
+      if (!config.enabledSources.has(sourceName)) {
         return { source: sourceName, status: 'disabled_by_config' as const, latencyMs: 0, resultCount: 0 };
       }
       const provider = createSourceProvider(config, sourceName);
@@ -87,7 +82,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   );
 
   const enabled = results.filter(
-    (r) => r.status !== 'not_implemented' && r.status !== 'disabled_by_config',
+    (r) => r.status !== 'disabled_by_config',
   );
   const healthy = enabled.filter((r) => r.status === 'healthy').length;
 

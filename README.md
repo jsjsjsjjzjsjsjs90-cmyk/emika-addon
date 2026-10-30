@@ -25,7 +25,7 @@ Six upstream adapters. Which ones are live is controlled by `QOBUZ_ENABLED_SOURC
 | `lastbabe` | LastBabe (mint-on-demand) | Implemented, disabled by default |
 | `monochrome` | Monochrome | Implemented, disabled by default |
 | `deezer` | Remote addon proxy | Implemented, disabled by default |
-| `eljohnzc` | — | Not implemented (returns empty) |
+| `eljohnzc` | gglos personal addon | Working — search + stream |
 
 When multiple sources are enabled, `/search` races them and resolves with the first non-empty result. Each source has its own timeout (`SOURCE_SEARCH_TIMEOUT_MS`), so a hung provider cannot block the whole request.
 
@@ -86,7 +86,7 @@ healthy Returned at least one track
 no_results Responded, empty
 unhealthy Threw or timed out
 disabled_by_config Not in QOBUZ_ENABLED_SOURCES
-not_implemented No adapter exists (eljohnzc)
+not_implemented No adapter exists
 
 Top-level overallStatus: all_systems_operational · operational_with_minor_outages · degraded_but_functional · outage.
 
@@ -124,7 +124,7 @@ The addon refuses to boot in production if this is missing. If you lose it, exis
 Recommended
 
 Name Default Purpose
-QOBUZ_ENABLED_SOURCES qobuzdl,instable Comma-separated live sources
+QOBUZ_ENABLED_SOURCES qobuzdl,eljohnzc,instable Comma-separated live sources
 SOURCE_SEARCH_TIMEOUT_MS 3000 Per-source race timeout (ms)
 
 Optional

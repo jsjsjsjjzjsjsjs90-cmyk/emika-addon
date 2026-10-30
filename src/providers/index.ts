@@ -14,7 +14,6 @@ export type IsolatedSource =
   | 'deezer' | 'eljohnzc' | 'instable';
 
 function buildFor(config: Config, source: IsolatedSource): QobuzProvider | undefined {
-  if (source === 'eljohnzc') return undefined; // no implementation yet — do not wire it in
   if (!config.enabledSources.has(source)) return undefined;
 
   switch (source) {
@@ -22,6 +21,7 @@ function buildFor(config: Config, source: IsolatedSource): QobuzProvider | undef
     case 'lastbabe':   return new LastBabeProvider(config);
     case 'monochrome': return new MonochromeProvider(config);
     case 'deezer':     return new RemoteAddonProvider(config);
+    case 'eljohnzc':   return new RemoteAddonProvider(config, config.eljohnzcBaseUrl);
     case 'instable':   return new InstableProvider(config);
   }
 }
@@ -35,7 +35,7 @@ export function createProvider(config: Config): QobuzProvider {
       buildFor(config, 'lastbabe'),
       buildFor(config, 'monochrome'),
       buildFor(config, 'deezer'),
-      undefined,
+      buildFor(config, 'eljohnzc'),
       buildFor(config, 'instable'),
       config.sourceSearchTimeoutMs,
     );
