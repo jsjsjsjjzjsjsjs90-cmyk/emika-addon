@@ -41,6 +41,8 @@ const manifests = {
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
 app.get('/health', async () => ({
   ok: true,
+  provider: config.provider,
+  enabledSources: [...config.enabledSources],
   timeouts: {
     sourceSearchMs: config.sourceSearchTimeoutMs,
     sourceHealthMs: config.sourceHealthTimeoutMs,
