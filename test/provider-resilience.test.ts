@@ -47,7 +47,7 @@ test('remote addon preserves a base path and sends the BitChord client identity'
     const tracks = await provider.search('track', 'LOSSLESS', 'auto');
     assert.equal(tracks[0]?.upstreamId, '42');
     assert.equal(requests[0]?.url, 'https://remote.example.test/u/token/search?q=track&quality=LOSSLESS&atmos=auto');
-    assert.equal(requests[0]?.userAgent, 'BitChord/1.8.1');
+    assert.equal(requests[0]?.userAgent, 'BitChord/v1.9');
   } finally {
     globalThis.fetch = originalFetch;
   }

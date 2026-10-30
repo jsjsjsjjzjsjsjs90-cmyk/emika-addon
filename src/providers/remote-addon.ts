@@ -80,7 +80,7 @@ export class RemoteAddonProvider implements QobuzProvider {
         headers: { 
           accept: 'application/json',
           'accept-language': 'en-US,en;q=0.9,th;q=0.8',
-          'user-agent': 'BitChord/1.8.1',
+          'user-agent': 'BitChord/v1.9',
           'referer': base.replace(/\/$/, '') + '/',
           'origin': base.replace(/\/$/, '')
         }, 
