@@ -60,7 +60,14 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   const results = await Promise.all(
     sourceNames.map(async (sourceName) => {
       if (!config.enabledSources.has(sourceName)) {
-        return { source: sourceName, status: 'disabled_by_config' as const, latencyMs: 0, resultCount: 0 };
+        return {
+          source: sourceName,
+          status: 'disabled_by_config' as const,
+          latencyMs: 0,
+          resultCount: 0,
+          search: { status: 'not_tested' as const, latencyMs: 0 },
+          stream: { status: 'not_tested' as const, latencyMs: 0, attempts: 0 },
+        };
       }
       const provider = createSourceProvider(config, sourceName);
       const started = Date.now();
@@ -69,17 +76,68 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
           provider.search(testQuery, 'LOSSLESS', 'auto'),
           config.sourceHealthTimeoutMs,
         );
+        const searchLatencyMs = Date.now() - started;
+        if (tracks.length === 0) {
+          return {
+            source: sourceName,
+            status: 'no_results' as const,
+            latencyMs: searchLatencyMs,
+            resultCount: 0,
+            search: { status: 'no_results' as const, latencyMs: searchLatencyMs },
+            stream: { status: 'not_tested' as const, latencyMs: 0, attempts: 0 },
+          };
+        }
+
+        // Keep the full health probe within one deadline. Try a few results so
+        // one unplayable first match does not mark an otherwise healthy source down.
+        const candidates = tracks.filter((track) => track.upstreamId.trim()).slice(0, 3);
+        let streamLatencyMs = 0;
+        let attempts = 0;
+        let streamHealthy = false;
+        for (const track of candidates) {
+          const remainingMs = config.sourceHealthTimeoutMs - (Date.now() - started);
+          if (remainingMs <= 0) break;
+          attempts += 1;
+          const streamStarted = Date.now();
+          try {
+            const stream = await withTimeout(
+              provider.getStream(track.upstreamId, 'LOSSLESS', 'auto'),
+              remainingMs,
+            );
+            streamLatencyMs += Date.now() - streamStarted;
+            if (stream?.url) {
+              streamHealthy = true;
+              break;
+            }
+          } catch {
+            streamLatencyMs += Date.now() - streamStarted;
+          }
+        }
+
+        const totalLatencyMs = Date.now() - started;
         return {
           source: sourceName,
-          status: tracks.length > 0 ? ('healthy' as const) : ('no_results' as const),
-          latencyMs: Date.now() - started,
+          status: streamHealthy ? ('healthy' as const) : ('stream_unavailable' as const),
+          latencyMs: totalLatencyMs,
           resultCount: tracks.length,
+          search: { status: 'healthy' as const, latencyMs: searchLatencyMs },
+          stream: {
+            status: streamHealthy ? ('healthy' as const) : ('unavailable' as const),
+            latencyMs: streamLatencyMs,
+            attempts,
+          },
         };
       } catch (error) {
         return {
           source: sourceName,
           status: 'unhealthy' as const,
           latencyMs: Date.now() - started,
+          resultCount: 0,
+          search: {
+            status: 'unavailable' as const,
+            latencyMs: Date.now() - started,
+          },
+          stream: { status: 'not_tested' as const, latencyMs: 0, attempts: 0 },
           error: error instanceof Error && error.message === 'operation timed out' ? 'timeout' : 'upstream unavailable',
         };
       }
