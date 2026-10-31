@@ -299,14 +299,23 @@ app.setErrorHandler((error, _request, reply) => {
 });
 
 function parseQuality(value?: string): Quality {
-  const normalized = (value ?? 'LOSSLESS').toUpperCase();
+  const normalized = normalizeAlias(value ?? 'LOSSLESS');
   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
+  if (normalized === 'HI_RES' || normalized === 'HIRES' || normalized === 'HI_RES_LOSSLESS' || normalized === 'HIRES_LOSSLESS') {
+    return 'LOSSLESS';
+  }
   throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
 }
 function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
-  const normalized = (value ?? 'auto').toLowerCase();
+  const normalized = normalizeAlias(value ?? 'auto').toLowerCase();
   if (normalized === 'auto' || normalized === 'on' || normalized === 'off') return normalized;
+  if (normalized === 'none' || normalized === 'disabled' || normalized === 'disable' || normalized === 'false' || normalized === '0') {
+    return 'off';
+  }
   throw badRequest('atmos must be auto, on, or off');
+}
+function normalizeAlias(value: string): string {
+  return value.trim().toUpperCase().replace(/[\s-]+/g, '_');
 }
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -328,4 +337,4 @@ if (process.env.VERCEL !== '1') {
 }
 
 export default app;
-export { app, parseQuality };
+export { app, parseAtmos, parseQuality };
