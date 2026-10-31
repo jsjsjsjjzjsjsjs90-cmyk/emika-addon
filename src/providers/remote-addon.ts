@@ -62,12 +62,18 @@ export class RemoteAddonProvider implements QobuzProvider {
         codec: typeof body.codec === 'string' ? body.codec : undefined,
         container: typeof body.container === 'string' ? body.container : undefined,
         quality: typeof body.quality === 'string' ? body.quality : quality,
+        streamQuality: typeof body.streamQuality === 'string' ? body.streamQuality : undefined,
+        audioQuality: typeof body.audioQuality === 'string' ? body.audioQuality : undefined,
         manifest: body.manifest === 'hls' || body.manifest === 'dash' ? body.manifest : 'none',
         encrypted: body.encrypted === true,
         sampleRate: numberValue(body.sampleRate),
         bitDepth: numberValue(body.bitDepth),
         bitrate: numberValue(body.bitrate),
         audioMode: typeof body.audioMode === 'string' ? body.audioMode : undefined,
+        audioModes: Array.isArray(body.audioModes)
+          ? body.audioModes.filter((value): value is string => typeof value === 'string')
+          : undefined,
+        atmos: typeof body.atmos === 'boolean' ? body.atmos : undefined,
       };
     } catch (error) {
       return null; // Silent failure to protect the server
@@ -143,6 +149,7 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
     streamURL: typeof raw.streamURL === 'string' && /^https:\/\//i.test(raw.streamURL) ? raw.streamURL : undefined,
     format: typeof raw.format === 'string' ? raw.format : undefined,
     audioQuality: typeof raw.audioQuality === 'string' ? raw.audioQuality : undefined,
+    audioMode: typeof raw.audioMode === 'string' ? raw.audioMode : undefined,
     audioModes: Array.isArray(raw.audioModes) ? raw.audioModes.filter((value): value is string => typeof value === 'string') : undefined,
     atmos: typeof raw.atmos === 'boolean' ? raw.atmos : undefined,
   };

@@ -10,6 +10,7 @@ export interface QobuzTrack {
   streamURL?: string;
   format?: string;
   audioQuality?: string;
+  audioMode?: string;
   audioModes?: string[];
   atmos?: boolean;
 }
@@ -26,6 +27,10 @@ export interface QobuzStream {
   bitDepth?: number;
   bitrate?: number;
   audioMode?: string;
+  audioModes?: string[];
+  atmos?: boolean;
+  streamQuality?: string;
+  audioQuality?: string;
 }
 
 export interface QobuzProvider {
