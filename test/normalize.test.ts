@@ -31,3 +31,13 @@ test('rejects encrypted or non-HTTPS streams', () => {
   assert.throws(() => streamResponse({ url: 'https://cdn.example/a.flac', encrypted: true }, 'LOSSLESS'));
   assert.throws(() => streamResponse({ url: 'http://cdn.example/a.flac' }, 'LOSSLESS'));
 });
+
+test('normalizes BitChord stream metadata without overstating invalid values', () => {
+  assert.deepEqual(streamResponse({
+    url: 'https://cdn.example/a.flac', format: 'FLAC', sampleRate: 96000, bitDepth: 24, bitrate: 0,
+  }, 'LOSSLESS'), {
+    url: 'https://cdn.example/a.flac', format: 'flac', quality: 'LOSSLESS', codec: 'flac', container: 'flac',
+    manifest: 'none', encrypted: false, sampleRate: 96000, bitDepth: 24, bitrate: undefined,
+  });
+  assert.equal(streamResponse({ url: 'https://cdn.example/a', format: 'dash' }, 'LOSSLESS').manifest, 'dash');
+});

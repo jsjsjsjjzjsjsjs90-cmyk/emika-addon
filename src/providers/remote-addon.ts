@@ -67,6 +67,7 @@ export class RemoteAddonProvider implements QobuzProvider {
         sampleRate: numberValue(body.sampleRate),
         bitDepth: numberValue(body.bitDepth),
         bitrate: numberValue(body.bitrate),
+        audioMode: typeof body.audioMode === 'string' ? body.audioMode : undefined,
       };
     } catch (error) {
       return null; // Silent failure to protect the server
@@ -135,10 +136,15 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
   return {
     upstreamId: String(id), title: title.trim(), artist, album,
     duration: typeof raw.duration === 'number' ? raw.duration : undefined,
-    artworkURL: typeof raw.artworkURL === 'string' ? raw.artworkURL : typeof raw.artwork === 'string' ? raw.artwork : undefined,
+    artworkURL:
+      typeof raw.artworkURL === 'string' ? raw.artworkURL :
+      typeof raw.albumArtworkURL === 'string' ? raw.albumArtworkURL :
+      typeof raw.artwork === 'string' ? raw.artwork : undefined,
     streamURL: typeof raw.streamURL === 'string' && /^https:\/\//i.test(raw.streamURL) ? raw.streamURL : undefined,
     format: typeof raw.format === 'string' ? raw.format : undefined,
     audioQuality: typeof raw.audioQuality === 'string' ? raw.audioQuality : undefined,
+    audioModes: Array.isArray(raw.audioModes) ? raw.audioModes.filter((value): value is string => typeof value === 'string') : undefined,
+    atmos: typeof raw.atmos === 'boolean' ? raw.atmos : undefined,
   };
 }
 
