@@ -99,6 +99,35 @@ test('remote addon rejects non-HTTPS stream responses', async () => {
   }
 });
 
+test('remote addon does not reuse a direct stream URL for another quality', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    requests.push(String(input));
+    if (requests.length === 1) {
+      return new Response(JSON.stringify({ tracks: [{
+        id: 'quality-1', title: 'Quality Track',
+        streamURL: 'https://media.example.test/quality-1.flac',
+        format: 'flac', audioQuality: 'LOSSLESS',
+      }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ url: 'https://media.example.test/high.m4a', format: 'm4a', quality: 'HIGH' }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new RemoteAddonProvider(config(), 'https://remote.example.test');
+    const tracks = await provider.search('quality', 'LOSSLESS', 'auto');
+    const stream = await provider.getStream(tracks[0]!.upstreamId, 'HIGH', 'auto');
+    assert.equal(requests.length, 2);
+    assert.equal(stream?.quality, 'HIGH');
+    assert.equal(stream?.url, 'https://media.example.test/high.m4a');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('racing provider keeps the winning source namespace for stream resolution', async () => {
   const sourceA: QobuzProvider = {
     async search() {

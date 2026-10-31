@@ -3,9 +3,13 @@ import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.j
 import { UpstreamError } from './http.js';
 
 type RecordValue = Record<string, unknown>;
+type DirectStream = { url: string; format?: string; quality?: string; expiresAt: number };
+
+const DIRECT_STREAM_TTL_MS = 30_000;
+const MAX_DIRECT_STREAMS = 1_000;
 
 export class RemoteAddonProvider implements QobuzProvider {
-  private readonly directStreams = new Map<string, { url: string; format?: string; quality?: string }>();
+  private readonly directStreams = new Map<string, DirectStream>();
 
   constructor(private readonly config: Config, private readonly configuredBaseUrl?: string) {}
 
@@ -19,8 +23,14 @@ export class RemoteAddonProvider implements QobuzProvider {
           url: track.streamURL,
           format: track.format,
           quality: track.audioQuality,
+          expiresAt: Date.now() + Math.min(this.config.cacheTtlMs, DIRECT_STREAM_TTL_MS),
         });
       }
+    }
+    while (this.directStreams.size > MAX_DIRECT_STREAMS) {
+      const oldest = this.directStreams.keys().next().value;
+      if (typeof oldest !== 'string') break;
+      this.directStreams.delete(oldest);
     }
     return tracks;
   }
@@ -29,7 +39,8 @@ export class RemoteAddonProvider implements QobuzProvider {
     if (!/^[A-Za-z0-9_:-]+$/.test(trackId)) return null;
     const cleanId = trackId.replace(/^dz:/, '');
     const direct = this.directStreams.get(trackId) ?? this.directStreams.get(cleanId);
-    if (direct) {
+    const directQuality = normalizeQuality(direct?.quality);
+    if (direct && direct.expiresAt > Date.now() && (!directQuality || directQuality === quality)) {
       return {
         url: direct.url,
         format: direct.format,
@@ -37,6 +48,10 @@ export class RemoteAddonProvider implements QobuzProvider {
         manifest: 'none',
         encrypted: false,
       };
+    }
+    if (direct) {
+      this.directStreams.delete(trackId);
+      this.directStreams.delete(cleanId);
     }
 
     try {
@@ -131,4 +146,10 @@ function isRecord(value: unknown): value is RecordValue { return typeof value ==
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function normalizeQuality(value?: string): Quality | undefined {
+  const normalized = value?.trim().toUpperCase();
+  if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
+  return undefined;
 }
