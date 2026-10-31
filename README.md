@@ -46,7 +46,9 @@ When multiple sources are enabled, `/search` races them and resolves with the fi
 }
 ```
 
-GET /search?q=<query>&quality=<LOSSLESS|HIGH|LOW>&atmos=<auto|on|off>
+GET /search?q=<query>&quality=<HI_RES|LOSSLESS|HIGH|LOW>&atmos=<auto|on|off>
+
+Quality aliases accepted for compatibility include `hi_res`, `hi-res`, `hi res`, `hires`, and `hi_res_lossless`; these normalize to the distinct `HI_RES` tier rather than `LOSSLESS`. Atmos aliases such as `none`, `disabled`, and `false` normalize to `off`.
 
 ```json
 { "tracks": [{ "id": "qobuz_<signed>", "title": "...", "artist": "...", "album": "...", "artworkURL": "https://...", "duration": 180 }] }
@@ -58,7 +60,7 @@ GET /search?q=<query>&quality=<LOSSLESS|HIGH|LOW>&atmos=<auto|on|off>
 GET /stream/:id?quality=<...>&atmos=<...>
 
 ```json
-{ "url": "https://...", "format": "flac", "quality": "LOSSLESS", "manifest": "none" }
+{ "url": "https://...", "format": "flac", "quality": "HI_RES", "manifest": "none" }
 ```
 
 Returns 404 when:
@@ -128,6 +130,7 @@ Name Default Purpose
 QOBUZ_ENABLED_SOURCES instable Comma-separated live sources
 SOURCE_SEARCH_TIMEOUT_MS 3000 Per-source race timeout (ms)
 SOURCE_HEALTH_TIMEOUT_MS 6000 Per-source health diagnostic timeout (ms)
+INSTABLE_QUALITY_HI_RES 27 Instable quality ID for the dedicated Hi-Res tier
 
 Optional
 
@@ -197,7 +200,8 @@ Deploy to Vercel
 2. In Settings → Environment Variables, add these three for Production, Preview, and Development:
    ```
    QOBUZ_ID_SECRET          = <your generated 48-byte string>
-   QOBUZ_ENABLED_SOURCES    = instable
+     QOBUZ_ENABLED_SOURCES    = instable
+     INSTABLE_QUALITY_HI_RES  = 27
    SOURCE_SEARCH_TIMEOUT_MS = 3000
    ```
 3. Deploy. Then verify:

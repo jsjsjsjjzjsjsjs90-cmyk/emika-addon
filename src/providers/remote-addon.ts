@@ -162,7 +162,8 @@ function numberValue(value: unknown): number | undefined {
 }
 
 function normalizeQuality(value?: string): Quality | undefined {
-  const normalized = value?.trim().toUpperCase();
-  if (normalized === 'HI_RES' || normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
+  const normalized = value?.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'HI_RES' || normalized === 'HIRES' || normalized === 'HI_RES_LOSSLESS' || normalized === 'HIRES_LOSSLESS') return 'HI_RES';
+  if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
   return undefined;
 }
