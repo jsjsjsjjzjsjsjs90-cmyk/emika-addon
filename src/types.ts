@@ -1,4 +1,4 @@
-export type Quality = 'LOSSLESS' | 'HIGH' | 'LOW';
+export type Quality = 'HI_RES' | 'LOSSLESS' | 'HIGH' | 'LOW';
 
 export interface QobuzTrack {
   upstreamId: string;

@@ -25,6 +25,7 @@ export interface Config {
   instableStreamPath?: string;
   instableSource?: string;
   instableSendSource?: boolean;
+  instableQualityHiRes?: string;
   instableQualityLossless?: string;
   instableQualityHigh?: string;
   instableQualityLow?: string;
@@ -105,6 +106,7 @@ export function loadConfig(): Config {
     instableStreamPath: process.env.INSTABLE_STREAM_PATH?.trim(),
     instableSource: process.env.INSTABLE_SOURCE?.trim(),
     instableSendSource: (process.env.INSTABLE_SEND_SOURCE ?? '').trim().toLowerCase() === 'true',
+    instableQualityHiRes: process.env.INSTABLE_QUALITY_HI_RES?.trim(),
     instableQualityLossless: process.env.INSTABLE_QUALITY_LOSSLESS?.trim(),
     instableQualityHigh: process.env.INSTABLE_QUALITY_HIGH?.trim(),
     instableQualityLow: process.env.INSTABLE_QUALITY_LOW?.trim(),

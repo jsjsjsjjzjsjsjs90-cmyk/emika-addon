@@ -64,7 +64,7 @@ function qualityId(quality: Quality): string {
   // IDs verified from the Qobuz-DL route schema: 27, 7, 6, and 5.
   // Lossless uses the app default; HIGH/LOW use its MP3 rendition because
   // this public endpoint exposes no separate low-bitrate contract.
-  if (quality === 'LOSSLESS') return '27';
+  if (quality === 'HI_RES' || quality === 'LOSSLESS') return '27';
   return '5';
 }
 

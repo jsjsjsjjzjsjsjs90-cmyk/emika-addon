@@ -128,6 +128,27 @@ test('remote addon does not reuse a direct stream URL for another quality', asyn
   }
 });
 
+test('remote addon preserves the distinct HI_RES quality tier', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    requests.push(String(input));
+    return new Response(JSON.stringify({ url: 'https://media.example.test/hi-res.flac', format: 'flac', quality: 'HI_RES' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new RemoteAddonProvider(config(), 'https://remote.example.test');
+    const stream = await provider.getStream('42', 'HI_RES', 'off');
+    assert.equal(requests[0], 'https://remote.example.test/stream/42?quality=HI_RES&atmos=off');
+    assert.equal(stream?.quality, 'HI_RES');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('racing provider keeps the winning source namespace for stream resolution', async () => {
   const sourceA: QobuzProvider = {
     async search() {

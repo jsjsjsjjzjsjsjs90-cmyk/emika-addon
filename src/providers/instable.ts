@@ -33,6 +33,7 @@ export class InstableProvider implements QobuzProvider {
     this.source      = (config.instableSource ?? DEFAULT_SOURCE).trim() || DEFAULT_SOURCE;
     this.sendSource  = config.instableSendSource === true;
     this.qualityIds  = {
+      HI_RES:  (config.instableQualityHiRes  ?? '27').trim() || '27',
       LOSSLESS: (config.instableQualityLossless ?? '27').trim() || '27',
       HIGH:     (config.instableQualityHigh     ?? '6').trim()  || '6',
       LOW:      (config.instableQualityLow      ?? '5').trim()  || '5',

@@ -216,6 +216,7 @@ function registerAddon(
             type: 'select',
             default: 'lossless',
             options: [
+              { label: 'Hi-Res', value: 'hi_res' },
               { label: 'Lossless', value: 'lossless' },
               { label: 'High', value: 'high' },
               { label: 'Low', value: 'low' },
@@ -302,9 +303,9 @@ function parseQuality(value?: string): Quality {
   const normalized = normalizeAlias(value ?? 'LOSSLESS');
   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
   if (normalized === 'HI_RES' || normalized === 'HIRES' || normalized === 'HI_RES_LOSSLESS' || normalized === 'HIRES_LOSSLESS') {
-    return 'LOSSLESS';
+    return 'HI_RES';
   }
-  throw badRequest('quality must be LOSSLESS, HIGH, or LOW');
+  throw badRequest('quality must be HI_RES, LOSSLESS, HIGH, or LOW');
 }
 function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
   const normalized = normalizeAlias(value ?? 'auto').toLowerCase();

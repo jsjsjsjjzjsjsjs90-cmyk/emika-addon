@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 process.env.VERCEL = '1';
 const { parseAtmos, parseQuality } = await import('../src/server.js');
 
-test('parseQuality accepts LastWave hi_res aliases as LOSSLESS', () => {
+test('parseQuality accepts LastWave hi_res aliases as a distinct HI_RES tier', () => {
   for (const value of ['hi_res', 'HI_RES', 'hi-res', 'hi res', 'hires', 'hi_res_lossless', 'hi-res-lossless']) {
-    assert.equal(parseQuality(value), 'LOSSLESS', value);
+    assert.equal(parseQuality(value), 'HI_RES', value);
   }
 });
 
@@ -18,7 +18,12 @@ test('parseQuality keeps native tiers and defaults safely', () => {
 });
 
 test('parseQuality rejects unknown values', () => {
-  assert.throws(() => parseQuality('ultra'), /quality must be LOSSLESS, HIGH, or LOW/);
+  assert.throws(() => parseQuality('ultra'), /quality must be HI_RES, LOSSLESS, HIGH, or LOW/);
+});
+
+test('parseQuality trims aliases and does not conflate Hi-Res with Lossless', () => {
+  assert.equal(parseQuality('  Hi_Res  '), 'HI_RES');
+  assert.notEqual(parseQuality('hires'), parseQuality('lossless'));
 });
 
 test('parseAtmos maps LastWave none aliases to off', () => {

@@ -163,6 +163,6 @@ function numberValue(value: unknown): number | undefined {
 
 function normalizeQuality(value?: string): Quality | undefined {
   const normalized = value?.trim().toUpperCase();
-  if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
+  if (normalized === 'HI_RES' || normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
   return undefined;
 }

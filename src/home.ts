@@ -38,7 +38,7 @@ a{color:#9ecbff;}
 <header><h1>Qobuz TV</h1><p class="sub">Simple music search for Sony Bravia / Vewd</p></header>
 <form id="searchForm" onsubmit="return doSearch();">
 <input id="query" type="text" placeholder="Search artist, album or track" autocomplete="off">
-<select id="quality" title="Audio quality"><option value="LOSSLESS">Lossless</option><option value="HIGH">High</option><option value="LOW">Low</option></select>
+<select id="quality" title="Audio quality"><option value="HI_RES">Hi-Res</option><option value="LOSSLESS">Lossless</option><option value="HIGH">High</option><option value="LOW">Low</option></select>
 <button type="submit">SEARCH</button>
 </form>
 <div id="status">Type a search and press Enter.</div>
