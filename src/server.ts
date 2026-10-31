@@ -14,6 +14,12 @@ const app = Fastify({
   logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] },
   requestTimeout: config.serverRequestTimeoutMs,
 });
+app.addHook('onSend', async (_request, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Accept, Content-Type');
+  reply.header('X-Content-Type-Options', 'nosniff');
+});
 const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
@@ -266,7 +272,7 @@ function registerAddon(
       const stream = await withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs);
       if (!stream) throw notFound('track not available');
       try {
-        return reply.send(streamResponse(stream, quality));
+        return reply.header('Cache-Control', 'no-store').send(streamResponse(stream, quality));
       } catch {
         throw notFound('track has no playable rendition');
       }
