@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RemoteAddonProvider } from '../src/providers/remote-addon.js';
+import { InstableProvider } from '../src/providers/instable.js';
 import { RacingProvider } from '../src/providers/racing.js';
 import { normalizeHealthQuery } from '../src/query.js';
 import type { Config } from '../src/config.js';
@@ -144,6 +145,38 @@ test('remote addon preserves the distinct HI_RES quality tier', async () => {
     const stream = await provider.getStream('42', 'HI_RES', 'off');
     assert.equal(requests[0], 'https://remote.example.test/stream/42?quality=HI_RES&atmos=off');
     assert.equal(stream?.quality, 'HI_RES');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Instable receives atmos=on and HI_RES quality id 27 on search and stream', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (url.includes('/api/search')) {
+      return new Response(JSON.stringify({ tracks: [{ id: '42', title: 'Atmos Track' }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ url: 'https://media.example.test/atmos.flac', format: 'flac' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({
+      instableBaseUrl: 'https://instable.example.test',
+      instableQualityHiRes: '27',
+    }));
+    await provider.search('atmos track', 'HI_RES', 'on');
+    await provider.getStream('42', 'HI_RES', 'on');
+    assert.equal(requests[0], 'https://instable.example.test/api/search?q=atmos+track&limit=10&atmos=on');
+    assert.equal(requests[1], 'https://instable.example.test/api/player/stream/42?quality=27&atmos=on');
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -45,7 +45,7 @@ export class InstableProvider implements QobuzProvider {
   }
 
   // ─── search ────────────────────────────────────────────────────────
-  async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
+  async search(query: string, _quality: Quality, atmos: string): Promise<QobuzTrack[]> {
     const params: Record<string, string> = { q: query };
 
     // /api/get-music requires source; /api/search ignores it (harmless)
@@ -56,6 +56,7 @@ export class InstableProvider implements QobuzProvider {
     if (this.searchPath.includes('/search') && !this.searchPath.includes('get-music')) {
       params.limit = '10';
     }
+    params.atmos = normalizeAtmos(atmos);
 
     const body = await this.request(this.searchPath, params);
     const items = extractTrackItems(body);
@@ -63,9 +64,12 @@ export class InstableProvider implements QobuzProvider {
   }
 
   // ─── stream ────────────────────────────────────────────────────────
-  async getStream(trackId: string, quality: Quality, _atmos: string): Promise<QobuzStream | null> {
+  async getStream(trackId: string, quality: Quality, atmos: string): Promise<QobuzStream | null> {
     const path = `${this.streamPath}/${encodeURIComponent(trackId)}`;
-    const params: Record<string, string> = { quality: this.qualityIds[quality] };
+    const params: Record<string, string> = {
+      quality: this.qualityIds[quality],
+      atmos: normalizeAtmos(atmos),
+    };
 
     try {
       const body = await this.request(path, params);
@@ -240,6 +244,11 @@ function numberValue(value: unknown): number | undefined {
 function normalizePath(p: string): string {
   const trimmed = p.trim();
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+function normalizeAtmos(value: string): 'auto' | 'on' | 'off' {
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'on' || normalized === 'off' ? normalized : 'auto';
 }
 
 function defaultUserAgent(): string {
