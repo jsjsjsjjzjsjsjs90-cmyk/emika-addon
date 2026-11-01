@@ -212,7 +212,7 @@ function registerAddon(
         contentType: 'music',
         resources: ['search', 'stream'],
         allowDownloads: manifestAllowsDownloads(namespace) ? 1 : 0,
-        checkValidLossless: 0,
+        checkValidLossless: config.checkValidLossless ? 1 : 0,
         settings: [
           {
             key: 'quality',

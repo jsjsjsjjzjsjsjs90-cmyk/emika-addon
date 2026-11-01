@@ -42,6 +42,7 @@ export interface Config {
   rateLimitMaxKeys: number;
   maxQueryLength: number;
   allowDownloads: boolean;
+  checkValidLossless: boolean;
   downloadSources: Set<KnownSource>;
   enabledQualityTiers: Set<Quality>;
 }
@@ -63,6 +64,13 @@ const nonNegativeInt = (name: string, fallback: number): number => {
   if (!Number.isInteger(value) || value < 0) return fallback;
   return value;
 };
+
+export function parseZeroOneFlag(raw: string | undefined, fallback = false): boolean {
+  const normalized = raw?.trim();
+  if (normalized === '1') return true;
+  if (normalized === '0') return false;
+  return fallback;
+}
 
 function parseEnabledSources(raw?: string): Set<KnownSource> {
   const trimmed = (raw ?? 'instable').trim();
@@ -163,6 +171,7 @@ export function loadConfig(): Config {
     rateLimitMaxKeys: positiveInt('RATE_LIMIT_MAX_KEYS', 10_000),
     maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
     allowDownloads: (process.env.EMIKA_ALLOW_DOWNLOADS ?? '').trim().toLowerCase() === 'true',
+    checkValidLossless: parseZeroOneFlag(process.env.EMIKA_CHECK_VALID_LOSSLESS),
     downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),
     enabledQualityTiers: parseEnabledQualityTiers(process.env.EMIKA_DISABLED_QUALITY_TIERS),
   };
