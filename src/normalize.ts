@@ -37,6 +37,7 @@ export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: s
     artworkURL: absoluteUrl(track.artworkURL), streamURL: absoluteUrl(track.streamURL), format: track.format?.toLowerCase(),
     audioQuality: track.audioQuality?.trim(), audioMode: track.audioMode?.trim(),
     audioModes: track.audioModes, atmos: track.atmos,
+    sampleRate: positiveNumber(track.sampleRate), bitDepth: positiveInteger(track.bitDepth), bitrate: positiveNumber(track.bitrate),
   };
 }
 

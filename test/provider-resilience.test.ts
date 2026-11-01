@@ -150,6 +150,36 @@ test('remote addon preserves the distinct HI_RES quality tier', async () => {
   }
 });
 
+test('remote addon does not reuse a direct stream URL for another Atmos mode', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (requests.length === 1) {
+      return new Response(JSON.stringify({ tracks: [{
+        id: 'atmos-1', title: 'Atmos Track', streamURL: 'https://media.example.test/stereo.flac',
+        format: 'flac', audioQuality: 'HI_RES', atmos: false,
+      }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ url: 'https://media.example.test/atmos.flac', format: 'flac', quality: 'HI_RES', atmos: true }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new RemoteAddonProvider(config(), 'https://remote.example.test');
+    const tracks = await provider.search('atmos', 'HI_RES', 'off');
+    const stream = await provider.getStream(tracks[0]!.upstreamId, 'HI_RES', 'on');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1], 'https://remote.example.test/stream/atmos-1?quality=HI_RES&atmos=on');
+    assert.equal(stream?.atmos, true);
+    assert.equal(stream?.url, 'https://media.example.test/atmos.flac');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Instable receives atmos=on and HI_RES quality id 27 on search and stream', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];
@@ -157,7 +187,10 @@ test('Instable receives atmos=on and HI_RES quality id 27 on search and stream',
     const url = String(input);
     requests.push(url);
     if (url.includes('/api/search')) {
-      return new Response(JSON.stringify({ tracks: [{ id: '42', title: 'Atmos Track' }] }), {
+      return new Response(JSON.stringify({ tracks: [{
+        id: '42', title: 'Atmos Track', maximum_sampling_rate: 192,
+        maximum_bit_depth: 24, hires: true,
+      }] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -183,7 +216,10 @@ test('Instable receives atmos=on and HI_RES quality id 27 on search and stream',
       instableBaseUrl: 'https://instable.example.test',
       instableQualityHiRes: '27',
     }));
-    await provider.search('atmos track', 'HI_RES', 'on');
+    const tracks = await provider.search('atmos track', 'HI_RES', 'on');
+    assert.equal(tracks[0]?.sampleRate, 192000);
+    assert.equal(tracks[0]?.bitDepth, 24);
+    assert.equal(tracks[0]?.audioQuality, 'HI_RES_LOSSLESS');
     const stream = await provider.getStream('42', 'HI_RES', 'on');
     assert.equal(requests[0], 'https://instable.example.test/api/search?q=atmos+track&limit=10&atmos=on');
     assert.equal(requests[1], 'https://instable.example.test/api/player/stream/42?quality=27&atmos=on');

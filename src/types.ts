@@ -13,6 +13,9 @@ export interface QobuzTrack {
   audioMode?: string;
   audioModes?: string[];
   atmos?: boolean;
+  sampleRate?: number;
+  bitDepth?: number;
+  bitrate?: number;
 }
 
 export interface QobuzStream {

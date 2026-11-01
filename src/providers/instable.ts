@@ -185,6 +185,7 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
   const image     = album && isRecord(album.image) ? album.image : undefined;
 
   const bitDepth = typeof raw.maximum_bit_depth === 'number' ? raw.maximum_bit_depth : undefined;
+  const maximumSamplingRate = typeof raw.maximum_sampling_rate === 'number' ? raw.maximum_sampling_rate : undefined;
   const hires    = raw.hires === true;
 
   let audioQuality: string | undefined;
@@ -200,6 +201,10 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
     format:     bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
     audioQuality,
+    sampleRate: maximumSamplingRate !== undefined
+      ? (maximumSamplingRate < 1000 ? maximumSamplingRate * 1000 : maximumSamplingRate)
+      : undefined,
+    bitDepth,
   };
 }
 

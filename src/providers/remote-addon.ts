@@ -3,7 +3,18 @@ import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.j
 import { UpstreamError } from './http.js';
 
 type RecordValue = Record<string, unknown>;
-type DirectStream = { url: string; format?: string; quality?: string; expiresAt: number };
+type DirectStream = {
+  url: string;
+  format?: string;
+  quality?: string;
+  atmos: string;
+  sampleRate?: number;
+  bitDepth?: number;
+  audioMode?: string;
+  audioModes?: string[];
+  atmosAvailable?: boolean;
+  expiresAt: number;
+};
 
 const DIRECT_STREAM_TTL_MS = 30_000;
 const MAX_DIRECT_STREAMS = 1_000;
@@ -23,6 +34,12 @@ export class RemoteAddonProvider implements QobuzProvider {
           url: track.streamURL,
           format: track.format,
           quality: track.audioQuality,
+          atmos: normalizeAtmos(atmos),
+          sampleRate: track.sampleRate,
+          bitDepth: track.bitDepth,
+          audioMode: track.audioMode,
+          audioModes: track.audioModes,
+          atmosAvailable: track.atmos,
           expiresAt: Date.now() + Math.min(this.config.cacheTtlMs, DIRECT_STREAM_TTL_MS),
         });
       }
@@ -40,14 +57,21 @@ export class RemoteAddonProvider implements QobuzProvider {
     const cleanId = trackId.replace(/^dz:/, '');
     const direct = this.directStreams.get(trackId) ?? this.directStreams.get(cleanId);
     const directQuality = normalizeQuality(direct?.quality);
-    if (direct && direct.expiresAt > Date.now() && (!directQuality || directQuality === quality)) {
-      return {
+    const requestedAtmos = normalizeAtmos(atmos);
+    if (direct && direct.expiresAt > Date.now() && direct.atmos === requestedAtmos && (!directQuality || directQuality === quality)) {
+      const response: QobuzStream = {
         url: direct.url,
         format: direct.format,
         quality: direct.quality ?? quality,
         manifest: 'none',
         encrypted: false,
       };
+      if (direct.sampleRate !== undefined) response.sampleRate = direct.sampleRate;
+      if (direct.bitDepth !== undefined) response.bitDepth = direct.bitDepth;
+      if (direct.audioMode !== undefined) response.audioMode = direct.audioMode;
+      if (direct.audioModes !== undefined) response.audioModes = direct.audioModes;
+      if (direct.atmosAvailable !== undefined) response.atmos = direct.atmosAvailable;
+      return response;
     }
     if (direct) {
       this.directStreams.delete(trackId);
@@ -148,6 +172,8 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
       typeof raw.artwork === 'string' ? raw.artwork : undefined,
     streamURL: typeof raw.streamURL === 'string' && /^https:\/\//i.test(raw.streamURL) ? raw.streamURL : undefined,
     format: typeof raw.format === 'string' ? raw.format : undefined,
+    sampleRate: numberValue(raw.sampleRate),
+    bitDepth: numberValue(raw.bitDepth),
     audioQuality: typeof raw.audioQuality === 'string' ? raw.audioQuality : undefined,
     audioMode: typeof raw.audioMode === 'string' ? raw.audioMode : undefined,
     audioModes: Array.isArray(raw.audioModes) ? raw.audioModes.filter((value): value is string => typeof value === 'string') : undefined,
@@ -166,4 +192,9 @@ function normalizeQuality(value?: string): Quality | undefined {
   if (normalized === 'HI_RES' || normalized === 'HIRES' || normalized === 'HI_RES_LOSSLESS' || normalized === 'HIRES_LOSSLESS') return 'HI_RES';
   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
   return undefined;
+}
+
+function normalizeAtmos(value: string): 'auto' | 'on' | 'off' {
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'on' || normalized === 'off' ? normalized : 'auto';
 }
