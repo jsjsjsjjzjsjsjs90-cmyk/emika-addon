@@ -234,11 +234,30 @@ function toStream(body: unknown, requested: Quality): QobuzStream {
     sampleRate: numberValue(data.sampleRate),
     bitDepth: numberValue(data.bitDepth),
     bitrate: numberValue(data.bitrate),
+    audioMode: stringValue(data.audioMode ?? data.audio_mode),
+    audioModes: stringArray(data.audioModes ?? data.audio_modes),
+    atmos: booleanValue(data.atmos ?? data.isAtmos ?? data.dolbyAtmos),
+    streamQuality: stringValue(data.streamQuality ?? data.stream_quality),
+    audioQuality: stringValue(data.audioQuality ?? data.audio_quality),
   };
 }
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0).map((entry) => entry.trim());
+  return values.length > 0 ? values : undefined;
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function normalizePath(p: string): string {

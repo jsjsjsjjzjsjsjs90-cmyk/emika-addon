@@ -162,7 +162,17 @@ test('Instable receives atmos=on and HI_RES quality id 27 on search and stream',
         headers: { 'content-type': 'application/json' },
       });
     }
-    return new Response(JSON.stringify({ url: 'https://media.example.test/atmos.flac', format: 'flac' }), {
+    return new Response(JSON.stringify({
+      url: 'https://media.example.test/atmos.flac',
+      format: 'flac',
+      sampleRate: 192000,
+      bitDepth: 24,
+      audioMode: 'DOLBY_ATMOS',
+      audioModes: ['DOLBY_ATMOS', 'STEREO'],
+      atmos: true,
+      streamQuality: 'HI_RES_LOSSLESS',
+      audioQuality: 'HI_RES_LOSSLESS',
+    }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
@@ -174,9 +184,16 @@ test('Instable receives atmos=on and HI_RES quality id 27 on search and stream',
       instableQualityHiRes: '27',
     }));
     await provider.search('atmos track', 'HI_RES', 'on');
-    await provider.getStream('42', 'HI_RES', 'on');
+    const stream = await provider.getStream('42', 'HI_RES', 'on');
     assert.equal(requests[0], 'https://instable.example.test/api/search?q=atmos+track&limit=10&atmos=on');
     assert.equal(requests[1], 'https://instable.example.test/api/player/stream/42?quality=27&atmos=on');
+    assert.equal(stream?.audioMode, 'DOLBY_ATMOS');
+    assert.deepEqual(stream?.audioModes, ['DOLBY_ATMOS', 'STEREO']);
+    assert.equal(stream?.atmos, true);
+    assert.equal(stream?.sampleRate, 192000);
+    assert.equal(stream?.bitDepth, 24);
+    assert.equal(stream?.streamQuality, 'HI_RES_LOSSLESS');
+    assert.equal(stream?.audioQuality, 'HI_RES_LOSSLESS');
   } finally {
     globalThis.fetch = originalFetch;
   }
