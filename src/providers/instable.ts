@@ -35,7 +35,9 @@ export class InstableProvider implements QobuzProvider {
     this.sendSource  = config.instableSendSource === true;
     this.qualityIds  = {
       HI_RES:  (config.instableQualityHiRes  ?? '27').trim() || '27',
-      LOSSLESS: (config.instableQualityLossless ?? '27').trim() || '27',
+      // Qobuz quality IDs: 27 = max Hi-Res lossless, 6 = CD lossless.
+      // Keep both values configurable because mirrors may expose a different map.
+      LOSSLESS: (config.instableQualityLossless ?? '6').trim() || '6',
       HIGH:     (config.instableQualityHigh     ?? '6').trim()  || '6',
       LOW:      (config.instableQualityLow      ?? '5').trim()  || '5',
     };

@@ -233,6 +233,31 @@ test('Instable receives atmos=on and HI_RES quality id 27 on search and stream',
   }
 });
 
+test('Instable maps Qobuz LOSSLESS to quality id 6 instead of the Hi-Res id', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    requests.push(url);
+    return new Response(JSON.stringify({
+      url: 'https://media.example.test/lossless.flac',
+      format: 'flac',
+      sampleRate: 44100,
+      bitDepth: 16,
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({ instableBaseUrl: 'https://instable.example.test' }));
+    const stream = await provider.getStream('42', 'LOSSLESS', 'auto');
+    assert.equal(requests[0], 'https://instable.example.test/api/player/stream/42?quality=6&atmos=auto');
+    assert.equal(stream?.sampleRate, 44100);
+    assert.equal(stream?.bitDepth, 16);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('racing provider keeps the winning source namespace for stream resolution', async () => {
   const sourceA: QobuzProvider = {
     async search() {
