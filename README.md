@@ -192,6 +192,16 @@ Tests:
 npm test
 ```
 
+End-to-end integration test against a deployed addon (BitChord and LastWave request flows):
+
+```bash
+python3 scripts/test-bitchord-lastwave-integration.py \
+  --base https://emika-addon.vercel.app \
+  --query "Blue Train John Coltrane"
+```
+
+The script uses only Python's standard library, tests manifest/search/stream/health routes and isolated manifests, validates `quality=atmos`, `quality=hi_res`, download intent, and performs a four-byte Range check on the returned media without printing signed URLs.
+
 ---
 
 Deploy to Vercel
