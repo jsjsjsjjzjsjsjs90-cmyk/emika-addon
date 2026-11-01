@@ -38,7 +38,7 @@ export class LastBabeProvider implements QobuzProvider {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
       try {
-        const response = await fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal });
+        const response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': this.config.userAgent }, signal: controller.signal });
         let body: unknown;
         try { body = await response.json(); } catch { throw new UpstreamError(502, 'LastBabe returned invalid JSON'); }
         if (!response.ok) {
@@ -68,7 +68,10 @@ export class LastBabeProvider implements QobuzProvider {
 
   private async mintFreshUrl(landingUrl: string): Promise<string> {
     const root = landingUrl.endsWith('/') ? landingUrl : `${landingUrl}/`;
-    const challengeResponse = await fetch(`${root}challenge`, { signal: AbortSignal.timeout(Math.max(this.config.requestTimeoutMs, 15000)) });
+    const challengeResponse = await fetch(`${root}challenge`, {
+      headers: { 'user-agent': this.config.userAgent },
+      signal: AbortSignal.timeout(Math.max(this.config.requestTimeoutMs, 15000)),
+    });
     if (!challengeResponse.ok) throw new UpstreamError(502, 'LastBabe challenge failed');
     
     const challenge = await challengeResponse.json() as { challenge?: unknown; difficulty?: unknown };
@@ -110,7 +113,7 @@ export class LastBabeProvider implements QobuzProvider {
     }
 
     const mintResponse = await fetch(`${root}mint`, {
-      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': this.config.userAgent },
       body: JSON.stringify({ challenge: challenge.challenge, nonce: found }),
       signal: AbortSignal.timeout(Math.max(this.config.requestTimeoutMs, 15000)),
     });

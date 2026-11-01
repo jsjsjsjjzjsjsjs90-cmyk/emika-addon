@@ -23,6 +23,10 @@ app.addHook('onSend', async (_request, reply) => {
 const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
+  const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/');
+  if (config.requireBitChordUserAgent && isAddonResource && !isBitChordUserAgent(request.headers['user-agent'])) {
+    return reply.code(403).send({ error: 'BitChord User-Agent required' });
+  }
   if (!pathname.includes('/search') && !pathname.includes('/stream/') && pathname !== '/health/sources') return;
   const result = limiter.check(clientKey(request.ip));
   reply.header('X-RateLimit-Limit', result.limit);
@@ -33,6 +37,10 @@ app.addHook('onRequest', async (request, reply) => {
     return reply.code(429).send({ error: 'rate limit exceeded' });
   }
 });
+
+function isBitChordUserAgent(userAgent: string | undefined): boolean {
+  return typeof userAgent === 'string' && /^BitChord\/[\w.-]+$/i.test(userAgent.trim());
+}
 
 const manifests = {
   root:       { id: 'com.bitchord.qobuz',            name: 'Emika addon',              version: '1.0.0' },

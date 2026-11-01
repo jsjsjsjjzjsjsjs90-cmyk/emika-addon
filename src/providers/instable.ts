@@ -42,7 +42,7 @@ export class InstableProvider implements QobuzProvider {
       LOW:      (config.instableQualityLow      ?? '').trim(),
     };
     this.apiToken    = config.instableApiToken?.trim() || undefined;
-    this.userAgent   = config.instableUserAgent?.trim() || defaultUserAgent();
+    this.userAgent   = config.instableUserAgent?.trim() || config.userAgent || defaultUserAgent();
     this.timeoutMs   = config.requestTimeoutMs;
     this.maxAttempts = config.upstreamRetries;
   }

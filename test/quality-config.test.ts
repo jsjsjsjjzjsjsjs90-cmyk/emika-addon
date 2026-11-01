@@ -48,3 +48,23 @@ test('EMIKA_CHECK_VALID_LOSSLESS controls config with 0 and 1', () => {
     else process.env.EMIKA_CHECK_VALID_LOSSLESS = previous;
   }
 });
+
+test('User-Agent settings are configurable and safe by default', () => {
+  const previousRequired = process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT;
+  const previousUserAgent = process.env.EMIKA_USER_AGENT;
+  try {
+    delete process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT;
+    delete process.env.EMIKA_USER_AGENT;
+    assert.equal(loadConfig().requireBitChordUserAgent, false);
+    assert.equal(loadConfig().userAgent, 'BitChord/v1.9');
+    process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT = '1';
+    process.env.EMIKA_USER_AGENT = 'Emika/2.0';
+    assert.equal(loadConfig().requireBitChordUserAgent, true);
+    assert.equal(loadConfig().userAgent, 'Emika/2.0');
+  } finally {
+    if (previousRequired === undefined) delete process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT;
+    else process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT = previousRequired;
+    if (previousUserAgent === undefined) delete process.env.EMIKA_USER_AGENT;
+    else process.env.EMIKA_USER_AGENT = previousUserAgent;
+  }
+});

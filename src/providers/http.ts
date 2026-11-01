@@ -30,7 +30,7 @@ export class HttpQobuzProvider implements QobuzProvider {
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
     const url = new URL(path, this.config.apiBaseUrl);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    const headers: Record<string, string> = { accept: 'application/json' };
+    const headers: Record<string, string> = { accept: 'application/json', 'user-agent': this.config.userAgent };
     if (this.config.apiToken) headers.authorization = `Bearer ${this.config.apiToken}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);

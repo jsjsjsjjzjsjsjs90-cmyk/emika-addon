@@ -32,7 +32,7 @@ export class MonochromeProvider implements QobuzProvider {
     // 👇 แก้เป็นแบบนี้ 👇
     const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
     try {
-        const response = await fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal });
+        const response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': this.config.userAgent }, signal: controller.signal });
         let body: unknown;
         try { body = await response.json(); } catch { throw new UpstreamError(502, 'Monochrome returned invalid JSON'); }
         if (!response.ok) throw new UpstreamError(response.status >= 500 ? 502 : response.status, 'Monochrome request failed');

@@ -33,7 +33,7 @@ export class QobuzDlProvider implements QobuzProvider {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
       try {
-        const response = await fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal });
+        const response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': this.config.userAgent }, signal: controller.signal });
         let body: unknown;
         try { body = await response.json(); } catch { throw new UpstreamError(502, 'Qobuz-DL provider returned invalid JSON'); }
         if (!response.ok) {

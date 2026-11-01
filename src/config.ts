@@ -43,6 +43,8 @@ export interface Config {
   maxQueryLength: number;
   allowDownloads: boolean;
   checkValidLossless: boolean;
+  requireBitChordUserAgent: boolean;
+  userAgent: string;
   downloadSources: Set<KnownSource>;
   enabledQualityTiers: Set<Quality>;
 }
@@ -172,6 +174,8 @@ export function loadConfig(): Config {
     maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
     allowDownloads: (process.env.EMIKA_ALLOW_DOWNLOADS ?? '').trim().toLowerCase() === 'true',
     checkValidLossless: parseZeroOneFlag(process.env.EMIKA_CHECK_VALID_LOSSLESS),
+    requireBitChordUserAgent: parseZeroOneFlag(process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT),
+    userAgent: process.env.EMIKA_USER_AGENT?.trim() || 'BitChord/v1.9',
     downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),
     enabledQualityTiers: parseEnabledQualityTiers(process.env.EMIKA_DISABLED_QUALITY_TIERS),
   };
