@@ -239,7 +239,7 @@ function registerAddon(
 
       try {
         const tracks = await searchCache.getOrLoad(key, async () =>
-          (await withTimeout(provider.search(query, quality, atmos), config.serverRequestTimeoutMs)).flatMap((track) => {
+          (await withTimeout(provider.search(query, quality, atmos), config.sourceSearchTimeoutMs)).flatMap((track) => {
             try {
               return [normalizeTrack(track, config.idSecret, namespace)];
             } catch {
