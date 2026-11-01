@@ -46,9 +46,9 @@ When multiple sources are enabled, `/search` races them and resolves with the fi
 }
 ```
 
-GET /search?q=<query>&quality=<HI_RES|LOSSLESS|HIGH|LOW>&atmos=<auto|on|off>
+GET /search?q=<query>&quality=<ATMOS|HI_RES|LOSSLESS|HIGH|LOW>&atmos=<auto|on|off>
 
-Quality aliases accepted for compatibility include `hi_res`, `hi-res`, `hi res`, `hires`, and `hi_res_lossless`; these normalize to the distinct `HI_RES` tier rather than `LOSSLESS`. Atmos aliases such as `none`, `disabled`, and `false` normalize to `off`.
+Quality aliases accepted for compatibility include `atmos`, `dolby_atmos`, `hi_res`, `hi-res`, `hi res`, `hires`, and `hi_res_lossless`; Atmos quality aliases normalize to the `LOSSLESS` tier while the separate `atmos` parameter selects the immersive rendition. Hi-Res aliases normalize to the distinct `HI_RES` tier rather than `LOSSLESS`. Atmos aliases such as `none`, `disabled`, and `false` normalize to `off`.
 
 ```json
 { "tracks": [{ "id": "qobuz_<signed>", "title": "...", "artist": "...", "album": "...", "artworkURL": "https://...", "duration": 180 }] }

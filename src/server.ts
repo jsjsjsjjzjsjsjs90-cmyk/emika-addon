@@ -301,11 +301,15 @@ app.setErrorHandler((error, _request, reply) => {
 
 function parseQuality(value?: string): Quality {
   const normalized = normalizeAlias(value ?? 'LOSSLESS');
+  // LastWave uses quality=atmos for its explicit immersive-stream attempt.
+  // Atmos selection is carried separately by atmos=auto/on, so keep the
+  // underlying audio tier lossless instead of adding a provider quality tier.
+  if (normalized === 'ATMOS' || normalized === 'DOLBY_ATMOS') return 'LOSSLESS';
   if (normalized === 'LOSSLESS' || normalized === 'HIGH' || normalized === 'LOW') return normalized;
   if (normalized === 'HI_RES' || normalized === 'HIRES' || normalized === 'HI_RES_LOSSLESS' || normalized === 'HIRES_LOSSLESS') {
     return 'HI_RES';
   }
-  throw badRequest('quality must be HI_RES, LOSSLESS, HIGH, or LOW');
+  throw badRequest('quality must be ATMOS, HI_RES, LOSSLESS, HIGH, or LOW');
 }
 function parseAtmos(value?: string): 'auto' | 'on' | 'off' {
   const normalized = normalizeAlias(value ?? 'auto').toLowerCase();

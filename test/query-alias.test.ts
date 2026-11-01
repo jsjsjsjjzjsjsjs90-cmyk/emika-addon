@@ -18,8 +18,14 @@ test('parseQuality keeps native tiers and defaults safely', () => {
   assert.equal(parseQuality('low'), 'LOW');
 });
 
+test('parseQuality maps LastWave Atmos aliases to the lossless tier', () => {
+  assert.equal(parseQuality('atmos'), 'LOSSLESS');
+  assert.equal(parseQuality('dolby atmos'), 'LOSSLESS');
+  assert.equal(parseQuality('DOLBY_ATMOS'), 'LOSSLESS');
+});
+
 test('parseQuality rejects unknown values', () => {
-  assert.throws(() => parseQuality('ultra'), /quality must be HI_RES, LOSSLESS, HIGH, or LOW/);
+  assert.throws(() => parseQuality('ultra'), /quality must be ATMOS, HI_RES, LOSSLESS, HIGH, or LOW/);
 });
 
 test('parseQuality trims aliases and does not conflate Hi-Res with Lossless', () => {
