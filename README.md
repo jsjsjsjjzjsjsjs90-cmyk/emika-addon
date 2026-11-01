@@ -50,6 +50,8 @@ GET /search?q=<query>&quality=<ATMOS|HI_RES|LOSSLESS|HIGH|LOW>&atmos=<auto|on|of
 
 Quality aliases accepted for compatibility include `atmos`, `dolby_atmos`, `hi_res`, `hi-res`, `hi res`, `hires`, and `hi_res_lossless`; Atmos quality aliases normalize to the `LOSSLESS` tier while the separate `atmos` parameter selects the immersive rendition. Hi-Res aliases normalize to the distinct `HI_RES` tier rather than `LOSSLESS`. Atmos aliases such as `none`, `disabled`, and `false` normalize to `off`.
 
+Set `EMIKA_DISABLED_QUALITY_TIERS` to a comma-separated list such as `HIGH,LOW` to remove those options from the manifest and reject matching search/stream requests before any upstream call. The default is empty, so existing deployments keep every tier enabled. Unknown values are ignored, and if all tiers are listed, `LOSSLESS` remains enabled as a safe fallback.
+
 ```json
 { "tracks": [{ "id": "qobuz_<signed>", "title": "...", "artist": "...", "album": "...", "artworkURL": "https://...", "duration": 180 }] }
 ```
@@ -131,6 +133,7 @@ QOBUZ_ENABLED_SOURCES instable Comma-separated live sources
 SOURCE_SEARCH_TIMEOUT_MS 3000 Per-source race timeout (ms)
 SOURCE_HEALTH_TIMEOUT_MS 6000 Per-source health diagnostic timeout (ms)
 INSTABLE_QUALITY_HI_RES 27 Instable quality ID for the dedicated Hi-Res tier
+EMIKA_DISABLED_QUALITY_TIERS empty Comma-separated tiers to hide and reject, e.g. HIGH,LOW
 
 Optional
 

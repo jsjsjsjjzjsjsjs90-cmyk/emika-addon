@@ -1,4 +1,7 @@
+import type { Quality } from './types.js';
+
 export type KnownSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'eljohnzc' | 'instable';
+export const QUALITY_TIERS: readonly Quality[] = ['HI_RES', 'LOSSLESS', 'HIGH', 'LOW'];
 const KNOWN_SOURCES: readonly KnownSource[] = [
   'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable',
 ];
@@ -40,6 +43,7 @@ export interface Config {
   maxQueryLength: number;
   allowDownloads: boolean;
   downloadSources: Set<KnownSource>;
+  enabledQualityTiers: Set<Quality>;
 }
 
 const DEV_ID_SECRET = 'qobuz-bitchord-id-secret-dev-only';
@@ -59,6 +63,29 @@ function parseEnabledSources(raw?: string): Set<KnownSource> {
     .map((s) => s.trim().toLowerCase())
     .filter((s): s is KnownSource => (KNOWN_SOURCES as readonly string[]).includes(s));
   return new Set(parts);
+}
+
+export function parseDisabledQualityTiers(raw?: string): Set<Quality> {
+  const aliases: Record<string, Quality> = {
+    HI_RES: 'HI_RES', HIRES: 'HI_RES', HI_RES_LOSSLESS: 'HI_RES', HIRES_LOSSLESS: 'HI_RES',
+    LOSSLESS: 'LOSSLESS', FLAC: 'LOSSLESS', ATMOS: 'LOSSLESS', DOLBY_ATMOS: 'LOSSLESS',
+    HIGH: 'HIGH', LOW: 'LOW',
+  };
+  const disabled = new Set<Quality>();
+  for (const part of (raw ?? '').split(',')) {
+    const normalized = part.trim().toUpperCase().replace(/[\s-]+/g, '_');
+    const tier = aliases[normalized];
+    if (tier) disabled.add(tier);
+  }
+  return disabled;
+}
+
+export function parseEnabledQualityTiers(raw?: string): Set<Quality> {
+  const disabled = parseDisabledQualityTiers(raw);
+  const enabled = new Set(QUALITY_TIERS.filter((tier) => !disabled.has(tier)));
+  // Keep one usable tier if an operator accidentally disables every tier.
+  if (enabled.size === 0) enabled.add('LOSSLESS');
+  return enabled;
 }
 
 export function loadConfig(): Config {
@@ -124,5 +151,6 @@ export function loadConfig(): Config {
     maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
     allowDownloads: (process.env.EMIKA_ALLOW_DOWNLOADS ?? '').trim().toLowerCase() === 'true',
     downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),
+    enabledQualityTiers: parseEnabledQualityTiers(process.env.EMIKA_DISABLED_QUALITY_TIERS),
   };
 }

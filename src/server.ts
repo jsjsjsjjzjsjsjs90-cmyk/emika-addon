@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import { loadConfig } from './config.js';
+import { loadConfig, QUALITY_TIERS } from './config.js';
 import { homePage } from './home.js';
 import { TtlCache } from './cache.js';
 import { AppError, badRequest, notFound } from './errors.js';
@@ -81,7 +81,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
       const started = Date.now();
       try {
         const tracks = await withTimeout(
-          provider.search(testQuery, 'LOSSLESS', 'auto'),
+          provider.search(testQuery, healthQuality(), 'auto'),
           config.sourceHealthTimeoutMs,
         );
         const searchLatencyMs = Date.now() - started;
@@ -109,13 +109,13 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
           const streamStarted = Date.now();
           try {
             const stream = await withTimeout(
-              provider.getStream(track.upstreamId, 'LOSSLESS', 'auto'),
+              provider.getStream(track.upstreamId, healthQuality(), 'auto'),
               remainingMs,
             );
             streamLatencyMs += Date.now() - streamStarted;
             if (stream) {
               try {
-                streamResponse(stream, 'LOSSLESS');
+                streamResponse(stream, healthQuality());
                 streamHealthy = true;
                 break;
               } catch {
@@ -214,13 +214,10 @@ function registerAddon(
           {
             key: 'quality',
             type: 'select',
-            default: 'lossless',
-            options: [
-              { label: 'Hi-Res', value: 'hi_res' },
-              { label: 'Lossless', value: 'lossless' },
-              { label: 'High', value: 'high' },
-              { label: 'Low', value: 'low' },
-            ],
+            default: manifestQualityOptions().find((option) => option.value === 'lossless')?.value
+              ?? manifestQualityOptions()[0]?.value
+              ?? 'lossless',
+            options: manifestQualityOptions(),
           },
         ],
       }),
@@ -233,6 +230,7 @@ function registerAddon(
       if (!query) throw badRequest('q is required');
       if (query.length > config.maxQueryLength) throw badRequest(`q must be at most ${config.maxQueryLength} characters`);
       const quality = parseQuality(request.query.quality);
+      assertQualityEnabled(quality);
       const atmos = parseAtmos(request.query.atmos);
       const key = `${query}\u0000${quality}\u0000${atmos}`;
 
@@ -265,6 +263,7 @@ function registerAddon(
     route('/stream/:id'),
     async (request, reply) => {
       const quality = parseQuality(request.query.quality);
+      assertQualityEnabled(quality);
       const atmos = parseAtmos(request.query.atmos);
       const id = request.params.id;
       if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
@@ -285,6 +284,26 @@ function manifestAllowsDownloads(namespace?: string): boolean {
   if (!config.allowDownloads || config.downloadSources.size === 0) return false;
   if (namespace) return config.downloadSources.has(namespace as IsolatedSource);
   return [...config.enabledSources].every((source) => config.downloadSources.has(source));
+}
+
+function manifestQualityOptions(): Array<{ label: string; value: string }> {
+  const labels: Record<string, string> = {
+    HI_RES: 'Hi-Res', LOSSLESS: 'Lossless', HIGH: 'High', LOW: 'Low',
+  };
+  return QUALITY_TIERS
+    .filter((tier) => config.enabledQualityTiers.has(tier))
+    .map((tier) => ({ label: labels[tier], value: tier === 'HI_RES' ? 'hi_res' : tier.toLowerCase() }));
+}
+
+function healthQuality(): Quality {
+  if (config.enabledQualityTiers.has('LOSSLESS')) return 'LOSSLESS';
+  return QUALITY_TIERS.find((tier) => config.enabledQualityTiers.has(tier)) ?? 'LOSSLESS';
+}
+
+function assertQualityEnabled(quality: Quality): void {
+  if (!config.enabledQualityTiers.has(quality)) {
+    throw badRequest(`quality tier ${quality} is disabled by server configuration`);
+  }
 }
 
 app.setErrorHandler((error, _request, reply) => {
