@@ -48,7 +48,7 @@ export class InstableProvider implements QobuzProvider {
   }
 
   // ─── search ────────────────────────────────────────────────────────
-  async search(query: string, _quality: Quality, atmos: string): Promise<QobuzTrack[]> {
+  async search(query: string, quality: Quality, atmos: string): Promise<QobuzTrack[]> {
     const params: Record<string, string> = { q: query };
 
     // /api/get-music requires source; /api/search ignores it (harmless)
@@ -65,7 +65,7 @@ export class InstableProvider implements QobuzProvider {
     const items = extractTrackItems(body);
     const tracks = items.filter(isRecord).map(toTrack).filter((t): t is QobuzTrack => t !== null);
     for (const track of tracks) {
-      this.trackMetadata.set(track.upstreamId, {
+      this.trackMetadata.set(metadataKey(track.upstreamId, quality, atmos), {
         sampleRate: track.sampleRate,
         bitDepth: track.bitDepth,
         audioQuality: track.audioQuality,
@@ -95,7 +95,9 @@ export class InstableProvider implements QobuzProvider {
     try {
       const body = await this.request(path, params);
       const stream = toStream(body, quality);
-      const metadata = this.trackMetadata.get(trackId);
+      // Metadata is only safe to reuse for the exact rendition that was searched.
+      // Do not let a Hi-Res search annotate a later Lossless/High/Atmos stream.
+      const metadata = this.trackMetadata.get(metadataKey(trackId, quality, atmos));
       if (!metadata) return stream;
       return {
         ...stream,
@@ -202,6 +204,10 @@ function extractTrackItems(body: unknown): unknown[] {
   return [];
 }
 
+function metadataKey(trackId: string, quality: Quality, atmos: string): string {
+  return `${trackId}\u0000${quality}\u0000${normalizeAtmos(atmos)}`;
+}
+
 function toTrack(raw: RecordValue): QobuzTrack | null {
   const id = raw.id;
   const rawTitle = raw.title;
@@ -230,6 +236,7 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
     artist:     performer && typeof performer.name === 'string' ? performer.name : undefined,
     album:      album && typeof album.title === 'string' ? album.title : undefined,
     duration:   typeof raw.duration === 'number' ? raw.duration : undefined,
+    isrc:       stringValue(raw.isrc ?? raw.ISRC ?? raw.isrc_code),
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
     format:     bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
     audioQuality,
@@ -268,6 +275,7 @@ function toStream(body: unknown, requested: Quality): QobuzStream {
     quality: requested,
     manifest: 'none',
     encrypted: false,
+    expiresAt: numberValue(data.expiresAt ?? data.expires_at ?? data.expiry),
     sampleRate: numberValue(data.sampleRate),
     bitDepth: numberValue(data.bitDepth),
     bitrate: numberValue(data.bitrate),

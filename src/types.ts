@@ -6,6 +6,7 @@ export interface QobuzTrack {
   artist?: string;
   album?: string;
   duration?: number;
+  isrc?: string;
   artworkURL?: string;
   streamURL?: string;
   format?: string;
@@ -26,6 +27,7 @@ export interface QobuzStream {
   container?: string;
   manifest?: 'none' | 'hls' | 'dash';
   encrypted?: boolean;
+  expiresAt?: number;
   sampleRate?: number;
   bitDepth?: number;
   bitrate?: number;

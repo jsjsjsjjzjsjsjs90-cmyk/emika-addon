@@ -281,6 +281,32 @@ test('Instable maps Qobuz HIGH to quality id 5 (MP3 320)', async () => {
   }
 });
 
+test('Instable does not reuse Hi-Res search metadata for a Lossless stream', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url.includes('/api/search')) {
+      return new Response(JSON.stringify({ tracks: [{
+        id: 'metadata-isolation', title: 'Track', maximum_sampling_rate: 192, maximum_bit_depth: 24, hires: true,
+      }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({
+      url: 'https://media.example.test/lossless.flac', format: 'flac',
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({ instableBaseUrl: 'https://instable.example.test' }));
+    await provider.search('track', 'HI_RES', 'off');
+    const stream = await provider.getStream('metadata-isolation', 'LOSSLESS', 'off');
+    assert.equal(stream?.sampleRate, undefined);
+    assert.equal(stream?.bitDepth, undefined);
+    assert.equal(stream?.audioQuality, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Instable leaves LOW unsupported instead of duplicating the HIGH tier', async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;

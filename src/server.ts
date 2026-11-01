@@ -207,6 +207,9 @@ function registerAddon(
       .header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
       .send({
         ...manifest,
+        description: 'Qobuz lossless and Hi-Res music addon',
+        types: ['track'],
+        contentType: 'music',
         resources: ['search', 'stream'],
         allowDownloads: manifestAllowsDownloads(namespace) ? 1 : 0,
         checkValidLossless: 0,

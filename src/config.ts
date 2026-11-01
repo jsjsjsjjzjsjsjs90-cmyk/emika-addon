@@ -107,7 +107,10 @@ export function loadConfig(): Config {
   }
   const requestTimeoutMs = positiveInt('REQUEST_TIMEOUT_MS', 6000);
   const serverRequestTimeoutMs = positiveInt('SERVER_REQUEST_TIMEOUT_MS', 10_000);
-  const sourceSearchTimeoutMs = Math.min(positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 3000), requestTimeoutMs);
+  // Instable can legitimately take several seconds on a cache miss. Keep the
+  // source deadline below the upstream request ceiling without turning a slow
+  // but healthy search into a 500 response.
+  const sourceSearchTimeoutMs = Math.min(positiveInt('SOURCE_SEARCH_TIMEOUT_MS', 5000), requestTimeoutMs);
 
   return {
     host: process.env.HOST ?? '0.0.0.0',

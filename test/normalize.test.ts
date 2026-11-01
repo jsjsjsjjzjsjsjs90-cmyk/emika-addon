@@ -41,3 +41,23 @@ test('normalizes BitChord stream metadata without overstating invalid values', (
   });
   assert.equal(streamResponse({ url: 'https://cdn.example/a', format: 'dash' }, 'LOSSLESS').manifest, 'dash');
 });
+
+test('normalizes audio/mpeg streams to the MP3 format contract', () => {
+  assert.deepEqual(streamResponse({
+    url: 'https://cdn.example/a.mp3', format: 'mpeg',
+  }, 'HIGH'), {
+    url: 'https://cdn.example/a.mp3', format: 'mp3', quality: 'HIGH', codec: 'mp3', container: 'mpeg',
+    manifest: 'none', encrypted: false, sampleRate: undefined, bitDepth: undefined, bitrate: undefined,
+  });
+});
+
+test('normalizes Dolby DASH transport and E-AC-3 JOC aliases', () => {
+  assert.deepEqual(streamResponse({
+    url: 'https://cdn.example/atmos-manifest', format: 'application/dash+xml', codec: 'eac3_joc',
+    manifest: 'dash', audioMode: 'DOLBY_ATMOS', atmos: true,
+  }, 'LOSSLESS'), {
+    url: 'https://cdn.example/atmos-manifest', format: 'dash', quality: 'LOSSLESS', codec: 'eac3-joc',
+    container: undefined, manifest: 'dash', encrypted: false, sampleRate: undefined, bitDepth: undefined,
+    bitrate: undefined, audioMode: 'DOLBY_ATMOS', atmos: true,
+  });
+});

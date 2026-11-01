@@ -34,6 +34,7 @@ export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: s
     id: publicId(normalizedTrack, secret, namespace), title: normalizedTrack.title,
     artist: track.artist?.trim() || undefined, album: track.album?.trim() || undefined,
     duration: Number.isFinite(track.duration) && (track.duration as number) >= 0 ? track.duration : undefined,
+    ...(normalizeIsrc(track.isrc) ? { isrc: normalizeIsrc(track.isrc) } : {}),
     artworkURL: absoluteUrl(track.artworkURL), streamURL: absoluteUrl(track.streamURL), format: track.format?.toLowerCase(),
     audioQuality: track.audioQuality?.trim(), audioMode: track.audioMode?.trim(),
     audioModes: track.audioModes, atmos: track.atmos,
@@ -44,8 +45,8 @@ export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: s
 export function streamResponse(stream: QobuzStream, requested: Quality): QobuzStream {
   if (!/^https:\/\//i.test(stream.url) || stream.encrypted === true) throw new Error('stream is not an openable HTTPS rendition');
   if (stream.manifest && !['none', 'hls', 'dash'].includes(stream.manifest)) throw new Error('unsupported manifest type');
-  const format = stream.format?.trim().toLowerCase();
-  const codec = stream.codec?.trim().toLowerCase() ?? inferredCodec(format);
+  const format = normalizeFormat(stream.format);
+  const codec = normalizeCodec(stream.codec) ?? inferredCodec(format);
   const container = stream.container?.trim().toLowerCase() ?? inferredContainer(format);
   return {
     ...stream,
@@ -55,6 +56,7 @@ export function streamResponse(stream: QobuzStream, requested: Quality): QobuzSt
     container,
     manifest: stream.manifest ?? inferredManifest(format),
     encrypted: stream.encrypted ?? false,
+    ...(positiveNumber(stream.expiresAt) ? { expiresAt: positiveNumber(stream.expiresAt) } : {}),
     sampleRate: positiveNumber(stream.sampleRate),
     bitDepth: positiveInteger(stream.bitDepth),
     bitrate: positiveNumber(stream.bitrate),
@@ -66,6 +68,21 @@ function inferredCodec(format?: string): string | undefined {
   if (format === 'mp3') return 'mp3';
   if (format === 'aac') return 'aac';
   return undefined;
+}
+
+function normalizeFormat(value?: string): string | undefined {
+  const format = value?.trim().toLowerCase();
+  if (format === 'mpeg' || format === 'x-mpeg' || format === 'mp2') return 'mp3';
+  if (format === 'application/dash+xml' || format === 'mpegdash' || format === 'mpd') return 'dash';
+  if (format === 'application/vnd.apple.mpegurl' || format === 'application/x-mpegurl' || format === 'm3u8') return 'hls';
+  return format;
+}
+
+function normalizeCodec(value?: string): string | undefined {
+  const codec = value?.trim().toLowerCase();
+  if (codec === 'mpeg' || codec === 'x-mpeg' || codec === 'mp2') return 'mp3';
+  if (codec === 'eac3_joc' || codec === 'eac3-joc' || codec === 'ec-3' || codec === 'eac3') return 'eac3-joc';
+  return codec;
 }
 
 function inferredContainer(format?: string): string | undefined {
@@ -87,6 +104,11 @@ function positiveNumber(value?: number): number | undefined {
 
 function positiveInteger(value?: number): number | undefined {
   return positiveNumber(value) && Number.isInteger(value) ? value : undefined;
+}
+
+function normalizeIsrc(value?: string): string | undefined {
+  const normalized = value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return normalized && /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(normalized) ? normalized : undefined;
 }
 
 function sign(encoded: string, secret: string): string {
