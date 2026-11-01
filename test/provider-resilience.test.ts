@@ -198,8 +198,6 @@ test('Instable receives atmos=on and HI_RES quality id 27 on search and stream',
     return new Response(JSON.stringify({
       url: 'https://media.example.test/atmos.flac',
       format: 'flac',
-      sampleRate: 192000,
-      bitDepth: 24,
       audioMode: 'DOLBY_ATMOS',
       audioModes: ['DOLBY_ATMOS', 'STEREO'],
       atmos: true,

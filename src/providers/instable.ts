@@ -21,6 +21,7 @@ export class InstableProvider implements QobuzProvider {
   private readonly source: string;
   private readonly sendSource: boolean;
   private readonly qualityIds: Record<Quality, string>;
+  private readonly trackMetadata = new Map<string, Pick<QobuzTrack, 'sampleRate' | 'bitDepth' | 'audioQuality' | 'audioMode' | 'audioModes' | 'atmos'>>();
   private readonly apiToken?: string;
   private readonly userAgent: string;
   private readonly timeoutMs: number;
@@ -60,7 +61,23 @@ export class InstableProvider implements QobuzProvider {
 
     const body = await this.request(this.searchPath, params);
     const items = extractTrackItems(body);
-    return items.filter(isRecord).map(toTrack).filter((t): t is QobuzTrack => t !== null);
+    const tracks = items.filter(isRecord).map(toTrack).filter((t): t is QobuzTrack => t !== null);
+    for (const track of tracks) {
+      this.trackMetadata.set(track.upstreamId, {
+        sampleRate: track.sampleRate,
+        bitDepth: track.bitDepth,
+        audioQuality: track.audioQuality,
+        audioMode: track.audioMode,
+        audioModes: track.audioModes,
+        atmos: track.atmos,
+      });
+    }
+    while (this.trackMetadata.size > 2_000) {
+      const oldest = this.trackMetadata.keys().next().value;
+      if (typeof oldest !== 'string') break;
+      this.trackMetadata.delete(oldest);
+    }
+    return tracks;
   }
 
   // ─── stream ────────────────────────────────────────────────────────
@@ -73,7 +90,18 @@ export class InstableProvider implements QobuzProvider {
 
     try {
       const body = await this.request(path, params);
-      return toStream(body, quality);
+      const stream = toStream(body, quality);
+      const metadata = this.trackMetadata.get(trackId);
+      if (!metadata) return stream;
+      return {
+        ...stream,
+        sampleRate: stream.sampleRate ?? metadata.sampleRate,
+        bitDepth: stream.bitDepth ?? metadata.bitDepth,
+        audioQuality: stream.audioQuality ?? metadata.audioQuality,
+        audioMode: stream.audioMode ?? metadata.audioMode,
+        audioModes: stream.audioModes ?? metadata.audioModes,
+        atmos: stream.atmos ?? metadata.atmos,
+      };
     } catch (error) {
       // 410 = URL expired, 404 = track gone, 401/403 = auth, 400 = bad params
       // → return null so BitChord can trigger a fresh search
