@@ -84,7 +84,15 @@ export class InstableProvider implements QobuzProvider {
 
   // ─── stream ────────────────────────────────────────────────────────
   async getStream(trackId: string, quality: Quality, atmos: string): Promise<QobuzStream | null> {
-    const qualityId = this.qualityIds[quality];
+    const metadata = this.trackMetadata.get(metadataKey(trackId, quality, atmos));
+    // BitChord uses LOSSLESS for both CD lossless and Hi-Res lossless. If the
+    // preceding search identified this exact track as Hi-Res, request the
+    // provider's dedicated Hi-Res rendition instead of silently downgrading
+    // it to Qobuz quality 6.
+    const effectiveQuality = quality === 'LOSSLESS' && atmos !== 'on' && isHiResMetadata(metadata)
+      ? 'HI_RES'
+      : quality;
+    const qualityId = this.qualityIds[effectiveQuality];
     if (!qualityId) return null;
     const path = `${this.streamPath}/${encodeURIComponent(trackId)}`;
     const params: Record<string, string> = {
@@ -97,13 +105,16 @@ export class InstableProvider implements QobuzProvider {
       const stream = toStream(body, quality);
       // Metadata is only safe to reuse for the exact rendition that was searched.
       // Do not let a Hi-Res search annotate a later Lossless/High/Atmos stream.
-      const metadata = this.trackMetadata.get(metadataKey(trackId, quality, atmos));
-      if (!metadata) return stream;
+      // For BitChord's LOSSLESS request, effectiveQuality may intentionally be
+      // HI_RES; in that case the metadata and provider quality ID still match.
+      if (!metadata || effectiveQuality !== 'HI_RES' && quality !== effectiveQuality) return stream;
       return {
         ...stream,
-        sampleRate: stream.sampleRate ?? metadata.sampleRate,
-        bitDepth: stream.bitDepth ?? metadata.bitDepth,
-        audioQuality: stream.audioQuality ?? metadata.audioQuality,
+        ...(effectiveQuality === 'HI_RES' ? {
+          sampleRate: stream.sampleRate ?? metadata.sampleRate,
+          bitDepth: stream.bitDepth ?? metadata.bitDepth,
+          audioQuality: stream.audioQuality ?? metadata.audioQuality,
+        } : {}),
         audioMode: stream.audioMode ?? metadata.audioMode,
         audioModes: stream.audioModes ?? metadata.audioModes,
         atmos: stream.atmos ?? metadata.atmos,
@@ -206,6 +217,13 @@ function extractTrackItems(body: unknown): unknown[] {
 
 function metadataKey(trackId: string, quality: Quality, atmos: string): string {
   return `${trackId}\u0000${quality}\u0000${normalizeAtmos(atmos)}`;
+}
+
+function isHiResMetadata(metadata: Pick<QobuzTrack, 'sampleRate' | 'bitDepth' | 'audioQuality'> | undefined): boolean {
+  if (!metadata) return false;
+  return metadata.audioQuality?.toUpperCase() === 'HI_RES_LOSSLESS' ||
+    (metadata.sampleRate ?? 0) > 48000 ||
+    (metadata.bitDepth ?? 0) > 16;
 }
 
 function toTrack(raw: RecordValue): QobuzTrack | null {

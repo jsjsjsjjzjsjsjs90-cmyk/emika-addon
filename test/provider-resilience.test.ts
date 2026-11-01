@@ -258,6 +258,42 @@ test('Instable maps Qobuz LOSSLESS to quality id 6 instead of the Hi-Res id', as
   }
 });
 
+test('Instable upgrades BitChord LOSSLESS to quality id 27 for a searched Hi-Res track', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (url.includes('/api/search')) {
+      return new Response(JSON.stringify({ tracks: [{
+        id: '42', title: 'Hi-Res Track', maximum_sampling_rate: 96,
+        maximum_bit_depth: 24, hires: true,
+      }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({
+      url: 'https://media.example.test/hi-res.flac',
+      mimeType: 'audio/flac',
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({
+      instableBaseUrl: 'https://instable.example.test',
+      instableQualityHiRes: '27',
+      instableQualityLossless: '6',
+    }));
+    const tracks = await provider.search('hi-res track', 'LOSSLESS', 'off');
+    const stream = await provider.getStream(tracks[0]!.upstreamId, 'LOSSLESS', 'off');
+    assert.equal(requests[1], 'https://instable.example.test/api/player/stream/42?quality=27&atmos=off');
+    assert.equal(stream?.quality, 'LOSSLESS');
+    assert.equal(stream?.sampleRate, 96000);
+    assert.equal(stream?.bitDepth, 24);
+    assert.equal(stream?.audioQuality, 'HI_RES_LOSSLESS');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Instable maps Qobuz HIGH to quality id 5 (MP3 320)', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];
