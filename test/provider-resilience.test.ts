@@ -258,6 +258,46 @@ test('Instable maps Qobuz LOSSLESS to quality id 6 instead of the Hi-Res id', as
   }
 });
 
+test('Instable maps Qobuz HIGH to quality id 5 (MP3 320)', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    requests.push(String(input));
+    return new Response(JSON.stringify({
+      url: 'https://media.example.test/high.mp3',
+      format: 'mp3',
+      bitrate: 320000,
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({ instableBaseUrl: 'https://instable.example.test' }));
+    const stream = await provider.getStream('42', 'HIGH', 'off');
+    assert.equal(requests[0], 'https://instable.example.test/api/player/stream/42?quality=5&atmos=off');
+    assert.equal(stream?.format, 'mp3');
+    assert.equal(stream?.bitrate, 320000);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Instable leaves LOW unsupported instead of duplicating the HIGH tier', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response('{}', { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({ instableBaseUrl: 'https://instable.example.test' }));
+    assert.equal(await provider.getStream('42', 'LOW', 'off'), null);
+    assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('racing provider keeps the winning source namespace for stream resolution', async () => {
   const sourceA: QobuzProvider = {
     async search() {

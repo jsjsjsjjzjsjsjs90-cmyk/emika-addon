@@ -38,8 +38,8 @@ export class InstableProvider implements QobuzProvider {
       // Qobuz quality IDs: 27 = max Hi-Res lossless, 6 = CD lossless.
       // Keep both values configurable because mirrors may expose a different map.
       LOSSLESS: (config.instableQualityLossless ?? '6').trim() || '6',
-      HIGH:     (config.instableQualityHigh     ?? '6').trim()  || '6',
-      LOW:      (config.instableQualityLow      ?? '5').trim()  || '5',
+      HIGH:     (config.instableQualityHigh     ?? '5').trim()  || '5',
+      LOW:      (config.instableQualityLow      ?? '').trim(),
     };
     this.apiToken    = config.instableApiToken?.trim() || undefined;
     this.userAgent   = config.instableUserAgent?.trim() || defaultUserAgent();
@@ -84,9 +84,11 @@ export class InstableProvider implements QobuzProvider {
 
   // ─── stream ────────────────────────────────────────────────────────
   async getStream(trackId: string, quality: Quality, atmos: string): Promise<QobuzStream | null> {
+    const qualityId = this.qualityIds[quality];
+    if (!qualityId) return null;
     const path = `${this.streamPath}/${encodeURIComponent(trackId)}`;
     const params: Record<string, string> = {
-      quality: this.qualityIds[quality],
+      quality: qualityId,
       atmos: normalizeAtmos(atmos),
     };
 
