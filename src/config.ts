@@ -56,6 +56,14 @@ const positiveInt = (name: string, fallback: number): number => {
   return value;
 };
 
+const nonNegativeInt = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) return fallback;
+  return value;
+};
+
 function parseEnabledSources(raw?: string): Set<KnownSource> {
   const trimmed = (raw ?? 'instable').trim();
   const parts = trimmed
@@ -117,7 +125,9 @@ export function loadConfig(): Config {
     port: positiveInt('PORT', Number(process.env.SERVER_PORT) || 3000),
     requestTimeoutMs,
     serverRequestTimeoutMs,
-    upstreamRetries: positiveInt('UPSTREAM_RETRIES', 1),
+    // Zero is intentional: it disables retries and prevents a public burst
+    // from multiplying traffic to the upstream provider.
+    upstreamRetries: nonNegativeInt('UPSTREAM_RETRIES', 1),
     cacheTtlMs: positiveInt('CACHE_TTL_SECONDS', 300) * 1000,
     idSecret: secretEnv || DEV_ID_SECRET,
     provider,
