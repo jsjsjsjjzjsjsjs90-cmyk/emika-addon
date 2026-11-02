@@ -25,7 +25,7 @@ app.addHook('onSend', async (_request, reply) => {
 const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
-  const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/') || pathname.includes('/download/');
+  const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/') || pathname.includes('/media/') || pathname.includes('/download/');
   const hasBitChordIdentity = isBitChordUserAgent(request.headers['user-agent']);
   const hasUiSession = config.allowSignedUiSession && verifyUiSession(
     readCookie(request.headers.cookie, UI_SESSION_COOKIE),
@@ -34,7 +34,7 @@ app.addHook('onRequest', async (request, reply) => {
   if (config.requireBitChordUserAgent && isAddonResource && !hasBitChordIdentity && !hasUiSession) {
     return reply.code(403).send({ error: 'BitChord User-Agent required' });
   }
-  if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;
+  if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/media/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;
   const result = limiter.check(clientKey(request.ip));
   reply.header('X-RateLimit-Limit', result.limit);
   reply.header('X-RateLimit-Remaining', result.remaining);
@@ -227,6 +227,8 @@ function registerAddon(
   namespace?: string,
 ): void {
   const searchCache = new TtlCache<PublicTrack[]>(config.cacheTtlMs);
+  const trackNames = new Map<string, string>();
+  const streamCache = new TtlCache<Awaited<ReturnType<QobuzProvider['getStream']>>>(30_000);
   const route = (path: string): string => joinRoute(prefix, path);
 
   app.get(route('/manifest.json'), async (_request, reply) =>
@@ -274,6 +276,11 @@ function registerAddon(
             }
           }),
         );
+        for (const track of tracks) {
+          const baseName = [track.artist, track.title].filter(Boolean).join(' - ') || 'download';
+          trackNames.set(track.id, downloadFilename(baseName, track.format));
+        }
+        while (trackNames.size > 2_000) trackNames.delete(trackNames.keys().next().value as string);
         return reply
           .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
           .send({ tracks });
@@ -289,7 +296,7 @@ function registerAddon(
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { quality?: string; atmos?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { quality?: string; atmos?: string; filename?: string } }>(
     route('/stream/:id'),
     async (request, reply) => {
       const quality = parseQuality(request.query.quality);
@@ -299,10 +306,19 @@ function registerAddon(
       if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
       const upstreamId = upstreamIdFromPublicId(id, config.idSecret, namespace);
       if (!upstreamId) throw notFound('track not available');
-      const stream = await withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs);
+      const stream = await resolveStream(provider, streamCache, upstreamId, quality, atmos);
       if (!stream) throw notFound('track not available');
       try {
-        return reply.header('Cache-Control', 'no-store').send(streamResponse(stream, quality));
+        const normalized = streamResponse(stream, quality);
+        const filename = downloadFilename(request.query.filename || trackNames.get(id), normalized.format);
+        const forwardedProtocol = request.headers['x-forwarded-proto'];
+        const protocol = forwardedProtocol === 'http' ? 'http' : 'https';
+        const origin = `${protocol}://${request.headers.host ?? 'localhost'}`;
+        const mediaUrl = new URL(route(`/media/${encodeURIComponent(id)}`), origin);
+        mediaUrl.searchParams.set('quality', quality.toLowerCase());
+        mediaUrl.searchParams.set('atmos', atmos);
+        mediaUrl.searchParams.set('filename', filename);
+        return reply.header('Cache-Control', 'no-store').send({ ...normalized, url: mediaUrl.toString() });
       } catch {
         throw notFound('track has no playable rendition');
       }
@@ -320,17 +336,49 @@ function registerAddon(
       if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
       const upstreamId = upstreamIdFromPublicId(id, config.idSecret, namespace);
       if (!upstreamId) throw notFound('track not available');
-      const stream = await withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs);
+      const stream = await resolveStream(provider, streamCache, upstreamId, quality, atmos);
       if (!stream) throw notFound('track not available');
       const response = await withTimeout(fetch(stream.url), config.serverRequestTimeoutMs);
       if (!response.ok || !response.body) throw notFound('download is not available');
-      const filename = downloadFilename(request.query.filename, stream.format);
+      const filename = downloadFilename(request.query.filename || trackNames.get(id), stream.format);
       const asciiFilename = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
       reply.header('Cache-Control', 'no-store');
       reply.header('Content-Type', response.headers.get('content-type') ?? 'application/octet-stream');
       reply.header('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
       const length = response.headers.get('content-length');
       if (length) reply.header('Content-Length', length);
+      return reply.send(Readable.fromWeb(response.body as any));
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { quality?: string; atmos?: string; filename?: string } }>(
+    route('/media/:id'),
+    async (request, reply) => {
+      const quality = parseQuality(request.query.quality);
+      assertQualityEnabled(quality);
+      const atmos = parseAtmos(request.query.atmos);
+      const id = request.params.id;
+      if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
+      const upstreamId = upstreamIdFromPublicId(id, config.idSecret, namespace);
+      if (!upstreamId) throw notFound('track not available');
+      const stream = await resolveStream(provider, streamCache, upstreamId, quality, atmos);
+      if (!stream) throw notFound('track not available');
+      const headers: Record<string, string> = {};
+      if (request.headers.range) headers.range = request.headers.range;
+      const response = await withTimeout(fetch(stream.url, { headers }), config.serverRequestTimeoutMs);
+      if (!response.ok || !response.body) throw notFound('media is not available');
+      const normalized = streamResponse(stream, quality);
+      const filename = downloadFilename(request.query.filename || trackNames.get(id), normalized.format);
+      const asciiFilename = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+      reply.code(response.status);
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Accept-Ranges', response.headers.get('accept-ranges') ?? 'bytes');
+      reply.header('Content-Type', response.headers.get('content-type') ?? 'application/octet-stream');
+      reply.header('Content-Disposition', `inline; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      for (const name of ['content-length', 'content-range']) {
+        const value = response.headers.get(name);
+        if (value) reply.header(name, value);
+      }
       return reply.send(Readable.fromWeb(response.body as any));
     },
   );
@@ -379,6 +427,17 @@ function downloadFilename(input: string | undefined, format: string | undefined)
     filename = Array.from(filename).slice(0, -1).join('').trim();
   }
   return `${filename || 'download'}${extension}`;
+}
+
+async function resolveStream(
+  provider: QobuzProvider,
+  cache: TtlCache<Awaited<ReturnType<QobuzProvider['getStream']>>>,
+  upstreamId: string,
+  quality: Quality,
+  atmos: string,
+): Promise<Awaited<ReturnType<QobuzProvider['getStream']>>> {
+  const key = `${upstreamId}\u0000${quality}\u0000${atmos}`;
+  return cache.getOrLoad(key, () => withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs));
 }
 
 app.setErrorHandler((error, _request, reply) => {
