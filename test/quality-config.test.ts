@@ -134,6 +134,7 @@ test('separates root source policy from optional isolated sources', () => {
     assert.deepEqual([...config.rootEnabledSources ?? []], ['instable']);
     assert.equal(config.eljohnzcBaseUrl, 'https://eljohnzc-addon.de.deplexo.com/59efe06a96');
     assert.equal(config.bitchordHiresBaseUrl, 'https://bitchord-hires-addon.de.deplexo.com');
+    assert.equal(config.remoteAddonTimeoutMs, 8000);
   } finally {
     if (previousEnabled === undefined) delete process.env.QOBUZ_ENABLED_SOURCES;
     else process.env.QOBUZ_ENABLED_SOURCES = previousEnabled;

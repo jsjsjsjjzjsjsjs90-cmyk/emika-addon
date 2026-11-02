@@ -124,7 +124,10 @@ export class RemoteAddonProvider implements QobuzProvider {
     const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.config.remoteAddonTimeoutMs ?? this.config.requestTimeoutMs,
+    );
     
     try {
       const response = await fetch(url, { 

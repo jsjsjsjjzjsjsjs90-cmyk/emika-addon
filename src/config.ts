@@ -176,10 +176,7 @@ export function loadConfig(): Config {
     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),
     rootEnabledSources: parseEnabledSources(process.env.EMIKA_ROOT_SOURCES ?? process.env.QOBUZ_ENABLED_SOURCES),
     sourceSearchTimeoutMs,
-    remoteAddonTimeoutMs: Math.min(
-      positiveInt('REMOTE_ADDON_TIMEOUT_MS', 8000),
-      serverRequestTimeoutMs,
-    ),
+    remoteAddonTimeoutMs: positiveInt('REMOTE_ADDON_TIMEOUT_MS', 8000),
     sourceHealthTimeoutMs: positiveInt(
       'SOURCE_HEALTH_TIMEOUT_MS',
       Math.min(requestTimeoutMs, serverRequestTimeoutMs),
