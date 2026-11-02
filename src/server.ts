@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { Readable } from 'node:stream';
 import { loadConfig, QUALITY_TIERS } from './config.js';
 import { homePage } from './home.js';
 import { TtlCache } from './cache.js';
@@ -24,7 +25,7 @@ app.addHook('onSend', async (_request, reply) => {
 const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
-  const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/');
+  const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/') || pathname.includes('/download/');
   const hasBitChordIdentity = isBitChordUserAgent(request.headers['user-agent']);
   const hasUiSession = config.allowSignedUiSession && verifyUiSession(
     readCookie(request.headers.cookie, UI_SESSION_COOKIE),
@@ -33,7 +34,7 @@ app.addHook('onRequest', async (request, reply) => {
   if (config.requireBitChordUserAgent && isAddonResource && !hasBitChordIdentity && !hasUiSession) {
     return reply.code(403).send({ error: 'BitChord User-Agent required' });
   }
-  if (!pathname.includes('/search') && !pathname.includes('/stream/') && pathname !== '/health/sources') return;
+  if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;
   const result = limiter.check(clientKey(request.ip));
   reply.header('X-RateLimit-Limit', result.limit);
   reply.header('X-RateLimit-Remaining', result.remaining);
@@ -307,6 +308,32 @@ function registerAddon(
       }
     },
   );
+
+  app.get<{ Params: { id: string }; Querystring: { quality?: string; atmos?: string; filename?: string } }>(
+    route('/download/:id'),
+    async (request, reply) => {
+      if (!manifestAllowsDownloads(namespace)) throw badRequest('downloads are disabled for this addon');
+      const quality = parseQuality(request.query.quality);
+      assertQualityEnabled(quality);
+      const atmos = parseAtmos(request.query.atmos);
+      const id = request.params.id;
+      if (!/^qobuz_[A-Za-z0-9_-]{10,120}$/.test(id)) throw notFound('track not found');
+      const upstreamId = upstreamIdFromPublicId(id, config.idSecret, namespace);
+      if (!upstreamId) throw notFound('track not available');
+      const stream = await withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs);
+      if (!stream) throw notFound('track not available');
+      const response = await withTimeout(fetch(stream.url), config.serverRequestTimeoutMs);
+      if (!response.ok || !response.body) throw notFound('download is not available');
+      const filename = downloadFilename(request.query.filename, stream.format);
+      const asciiFilename = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Content-Type', response.headers.get('content-type') ?? 'application/octet-stream');
+      reply.header('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      const length = response.headers.get('content-length');
+      if (length) reply.header('Content-Length', length);
+      return reply.send(Readable.fromWeb(response.body as any));
+    },
+  );
 }
 
 function manifestAllowsDownloads(namespace?: string): boolean {
@@ -333,6 +360,25 @@ function assertQualityEnabled(quality: Quality): void {
   if (!config.enabledQualityTiers.has(quality)) {
     throw badRequest(`quality tier ${quality} is disabled by server configuration`);
   }
+}
+
+function downloadFilename(input: string | undefined, format: string | undefined): string {
+  const fallbackFormat = String(format ?? 'flac').toLowerCase().replace(/[^a-z0-9.+-]/g, '').slice(0, 12) || 'flac';
+  const raw = typeof input === 'string' ? input : 'download';
+  let filename = raw.normalize('NFC')
+    .replace(/[\\/:*?"<>|\x00-\x1f\x7f-\x9f\u2028\u2029\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[. ]+$/g, '')
+    .trim();
+  if (!filename) filename = 'download';
+  const extension = `.${fallbackFormat}`;
+  filename = filename.replace(/\.[a-z0-9]{1,12}$/i, '');
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(filename)) filename = `_${filename}`;
+  const maxBytes = 240;
+  while (Buffer.byteLength(`${filename}${extension}`, 'utf8') > maxBytes && filename.length > 1) {
+    filename = Array.from(filename).slice(0, -1).join('').trim();
+  }
+  return `${filename || 'download'}${extension}`;
 }
 
 app.setErrorHandler((error, _request, reply) => {
