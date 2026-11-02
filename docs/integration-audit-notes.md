@@ -58,3 +58,13 @@
 หลังปรับ Production Environment Variables และ redeploy แล้ว BitChord `BitChord/v1.9` และ LastWave `LastWave-Player/1.0` ค้นหาได้ HTTP 200 และคืนผลลัพธ์ 10 tracks. ทั้งสอง client เรียก `/stream/:id` ได้ HTTP 200 พร้อม `format=flac`, `quality=HI_RES` และ direct upstream URL. Browser flow ได้ `/media/:id` ตามที่ออกแบบไว้ และ Range request ได้ HTTP 206 พร้อม `Content-Range`, `Content-Length`, `Accept-Ranges` และชื่อไฟล์ `Final Client Audit.flac`.
 
 การตรวจ input ผิดรูปแบบได้ผลตามสัญญา: quality ที่ไม่รู้จักตอบ HTTP 400 และ track ID ที่ผิดรูปแบบตอบ HTTP 404. Logs ช่วงหลัง smoke test พบ request 200 จำนวน 1 รายการและไม่พบ 4xx/5xx หรือ runtime error ใหม่. Unit tests ยังคงผ่าน 56/56 และ TypeScript build ผ่าน.
+
+## Multi-method audit: Deplexo sources — 2026-11-03
+
+ตรวจเพิ่มแบบแยกหน่วยกับ Eljohnzc Deplexo, BitChord Hi-Res Deplexo, BitChord repository, LastWave Native, hifi-api และ Eclipse Music. หลักฐานที่ยืนยันได้คือทั้งสอง Deplexo source รองรับ `GET /manifest.json`, `GET /search?q=...` และ `GET /stream/{id}` แต่รายละเอียดต่างกัน: Eljohnzc ส่ง MPEG-DASH/FLAC-in-MP4 และ tokenized external media URLs; BitChord Hi-Res ส่ง FLAC signed URLs และมีกรณี `dz:` ที่ response ระบุ provider เป็น Qobuz จึงต้องถือว่า provider identity ยังไม่น่าเชื่อถือเต็มที่.
+
+เพิ่ม source identity `bitchordhires` และ route แยก `/g`; เปลี่ยนค่าเริ่มต้นของ Eljohnzc และ BitChord Hi-Res ไปยัง Deplexo URLs ใหม่. เพิ่ม `EMIKA_ROOT_SOURCES` เพื่อให้ root addon ใช้เฉพาะ Instable ต่อไป ขณะที่ source ใหม่เปิดได้เฉพาะ isolated routes เมื่ออยู่ใน `QOBUZ_ENABLED_SOURCES`. เพิ่ม `REMOTE_ADDON_TIMEOUT_MS` สำหรับ isolated remote search ที่ช้ากว่า Instable. การดาวน์โหลดของ source ใหม่ไม่เปิดเป็นค่าเริ่มต้นจนกว่าจะมีการยืนยันสิทธิ์และ policy ของ upstream.
+
+ผล local integration: `/e/manifest.json` และ `/g/manifest.json` ตอบ HTTP 200; source ใหม่ทั้งสองค้นหาได้เมื่อเปิดใน `QOBUZ_ENABLED_SOURCES`; root search ยังคงแยกใช้ root source policy. Contract ที่ยึดใช้คือ HTTPS, JSON, URL-encoded path/query, `encrypted=false`, metadata ตาม stream จริง และไม่เก็บ signed URL/token ถาวร.
+
+ผล multi-method สรุปว่า wire contract สามารถนำมาทำ adapter ได้ แต่ยังไม่ควรอ้างว่า source ใหม่มีสิทธิ์ดาวน์โหลดหรือรองรับ Hi-Res ทุกเพลงจาก label เพียงอย่างเดียว. Eclipse ใช้เป็น reference ด้าน addon contract เท่านั้น ไม่ได้ยืนยันว่าเป็น audio source ของ Emika. hifi-api ใช้เป็น reference ด้าน capability-based metadata/expiry/error handling ไม่ได้นำโค้ดหรือ credential มาใช้.

@@ -122,3 +122,22 @@ test('stream routing defaults to proxy and enables native direct modes independe
     }
   }
 });
+
+test('separates root source policy from optional isolated sources', () => {
+  const previousEnabled = process.env.QOBUZ_ENABLED_SOURCES;
+  const previousRoot = process.env.EMIKA_ROOT_SOURCES;
+  try {
+    process.env.QOBUZ_ENABLED_SOURCES = 'instable,eljohnzc,bitchordhires';
+    process.env.EMIKA_ROOT_SOURCES = 'instable';
+    const config = loadConfig();
+    assert.deepEqual([...config.enabledSources], ['instable', 'eljohnzc', 'bitchordhires']);
+    assert.deepEqual([...config.rootEnabledSources ?? []], ['instable']);
+    assert.equal(config.eljohnzcBaseUrl, 'https://eljohnzc-addon.de.deplexo.com/59efe06a96');
+    assert.equal(config.bitchordHiresBaseUrl, 'https://bitchord-hires-addon.de.deplexo.com');
+  } finally {
+    if (previousEnabled === undefined) delete process.env.QOBUZ_ENABLED_SOURCES;
+    else process.env.QOBUZ_ENABLED_SOURCES = previousEnabled;
+    if (previousRoot === undefined) delete process.env.EMIKA_ROOT_SOURCES;
+    else process.env.EMIKA_ROOT_SOURCES = previousRoot;
+  }
+});

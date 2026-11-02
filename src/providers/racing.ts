@@ -77,6 +77,7 @@ export function createRacingProvider(
   monochrome?: QobuzProvider,
   deezer?: QobuzProvider,
   eljohnzc?: QobuzProvider,
+  bitchordhires?: QobuzProvider,
   instable?: QobuzProvider,
   perSourceTimeoutMs = 3000,
 ): QobuzProvider {
@@ -86,6 +87,7 @@ export function createRacingProvider(
   if (monochrome) sources.push({ name: 'monochrome', provider: monochrome });
   if (deezer)     sources.push({ name: 'deezer',     provider: deezer });
   if (eljohnzc)   sources.push({ name: 'eljohnzc',   provider: eljohnzc });
+  if (bitchordhires) sources.push({ name: 'bitchordhires', provider: bitchordhires });
   if (instable)   sources.push({ name: 'instable',   provider: instable });
   return new RacingProvider(sources, perSourceTimeoutMs);
 }

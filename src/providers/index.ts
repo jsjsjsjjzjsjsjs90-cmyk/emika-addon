@@ -11,7 +11,7 @@ import { InstableProvider } from './instable.js';
 
 export type IsolatedSource =
   | 'qobuzdl' | 'lastbabe' | 'monochrome'
-  | 'deezer' | 'eljohnzc' | 'instable';
+  | 'deezer' | 'eljohnzc' | 'bitchordhires' | 'instable';
 
 function buildFor(config: Config, source: IsolatedSource): QobuzProvider | undefined {
   if (!config.enabledSources.has(source)) return undefined;
@@ -22,22 +22,27 @@ function buildFor(config: Config, source: IsolatedSource): QobuzProvider | undef
     case 'monochrome': return new MonochromeProvider(config);
     case 'deezer':     return new RemoteAddonProvider(config);
     case 'eljohnzc':   return new RemoteAddonProvider(config, config.eljohnzcBaseUrl);
+    case 'bitchordhires': return new RemoteAddonProvider(config, config.bitchordHiresBaseUrl);
     case 'instable':   return new InstableProvider(config);
   }
 }
 
 export function createProvider(config: Config): QobuzProvider {
-  if (config.provider === 'qobuzdl') return new QobuzDlProvider(config);
-  if (config.provider === 'http')    return new HttpQobuzProvider(config);
-  if (config.provider === 'multi') {
+  const rootConfig = config.rootEnabledSources
+    ? { ...config, enabledSources: config.rootEnabledSources }
+    : config;
+  if (rootConfig.provider === 'qobuzdl') return new QobuzDlProvider(rootConfig);
+  if (rootConfig.provider === 'http')    return new HttpQobuzProvider(rootConfig);
+  if (rootConfig.provider === 'multi') {
     return createRacingProvider(
-      buildFor(config, 'qobuzdl'),
-      buildFor(config, 'lastbabe'),
-      buildFor(config, 'monochrome'),
-      buildFor(config, 'deezer'),
-      buildFor(config, 'eljohnzc'),
-      buildFor(config, 'instable'),
-      config.sourceSearchTimeoutMs,
+      buildFor(rootConfig, 'qobuzdl'),
+      buildFor(rootConfig, 'lastbabe'),
+      buildFor(rootConfig, 'monochrome'),
+      buildFor(rootConfig, 'deezer'),
+      buildFor(rootConfig, 'eljohnzc'),
+      buildFor(rootConfig, 'bitchordhires'),
+      buildFor(rootConfig, 'instable'),
+      rootConfig.sourceSearchTimeoutMs,
     );
   }
   return new StubQobuzProvider();

@@ -66,7 +66,8 @@ const manifests = {
   lastbabe:   { id: 'com.bitchord.qobuz.lastbabe',   name: 'LastBabe',                 version: '1.0.0' },
   monochrome: { id: 'com.bitchord.qobuz.monochrome', name: 'Monochrome Lossless',      version: '1.0.0' },
   deezer:     { id: 'com.bitchord.qobuz.deezer',     name: 'Deezer Fallback',          version: '1.0.0' },
-  eljohnzc:   { id: 'com.bitchord.qobuz.eljohnzc',   name: 'Eljohnzc Lossless',        version: '1.0.0' },
+    eljohnzc:   { id: 'com.bitchord.qobuz.eljohnzc',   name: 'Eljohnzc Lossless',        version: '1.0.0' },
+    bitchordhires: { id: 'com.bitchord.qobuz.bitchordhires', name: 'BitChord Hi-Res', version: '1.0.0' },
   instable:   { id: 'com.bitchord.qobuz.instable',   name: 'Instable Lossless',        version: '1.0.0' },
 } as const;
 
@@ -86,7 +87,8 @@ app.get('/', async (_request, reply) => {
 app.get('/health', async () => ({
   ok: true,
   provider: config.provider,
-  enabledSources: [...config.enabledSources],
+  enabledSources: [...(config.rootEnabledSources ?? config.enabledSources)],
+  configuredSources: [...config.enabledSources],
   timeouts: {
     sourceSearchMs: config.sourceSearchTimeoutMs,
     sourceHealthMs: config.sourceHealthTimeoutMs,
@@ -100,7 +102,7 @@ app.get('/health', async () => ({
 app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   const testQuery = normalizeHealthQuery(request.query.q, config.maxQueryLength);
   const sourceNames: IsolatedSource[] = [
-    'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable',
+    'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'bitchordhires', 'instable',
   ];
 
   const results = await Promise.all(
@@ -221,9 +223,10 @@ registerAddon('/',    createProvider(config),                     manifests.root
 registerAddon('/a',   createSourceProvider(config, 'qobuzdl'),    manifests.qobuzdl, 'qobuzdl');
 registerAddon('/b',   createSourceProvider(config, 'lastbabe'),   manifests.lastbabe, 'lastbabe');
 registerAddon('/c',   createSourceProvider(config, 'monochrome'), manifests.monochrome, 'monochrome');
-registerAddon('/d',   createSourceProvider(config, 'deezer'),     manifests.deezer, 'deezer');
+registerAddon('/d',   createSourceProvider(config, 'deezer'),     manifests.deezer,   'deezer');
 registerAddon('/e',   createSourceProvider(config, 'eljohnzc'),   manifests.eljohnzc, 'eljohnzc');
 registerAddon('/f',   createSourceProvider(config, 'instable'),   manifests.instable, 'instable');
+registerAddon('/g',   createSourceProvider(config, 'bitchordhires'), manifests.bitchordhires, 'bitchordhires');
 
 function joinRoute(prefix: string, path: string): string {
   const head = prefix.replace(/\/+$/, '');
@@ -282,7 +285,7 @@ function registerAddon(
 
       try {
         const tracks = await searchCache.getOrLoad(key, async () =>
-          (await withTimeout(provider.search(query, quality, atmos), config.sourceSearchTimeoutMs)).flatMap((track) => {
+          (await withTimeout(provider.search(query, quality, atmos), searchTimeoutFor(namespace))).flatMap((track) => {
             try {
               return [normalizeTrack(track, config.idSecret, namespace)];
             } catch {
@@ -431,6 +434,13 @@ function manifestAllowsDownloads(namespace?: string): boolean {
   if (!config.allowDownloads || config.downloadSources.size === 0) return false;
   if (namespace) return config.downloadSources.has(namespace as IsolatedSource);
   return [...config.enabledSources].every((source) => config.downloadSources.has(source));
+}
+
+function searchTimeoutFor(namespace?: string): number {
+  if (namespace === 'eljohnzc' || namespace === 'bitchordhires') {
+    return config.remoteAddonTimeoutMs ?? config.sourceSearchTimeoutMs;
+  }
+  return config.sourceSearchTimeoutMs;
 }
 
 function manifestQualityOptions(): Array<{ label: string; value: string }> {

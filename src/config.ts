@@ -1,9 +1,9 @@
 import type { Quality } from './types.js';
 
-export type KnownSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'eljohnzc' | 'instable';
+export type KnownSource = 'qobuzdl' | 'lastbabe' | 'monochrome' | 'deezer' | 'eljohnzc' | 'bitchordhires' | 'instable';
 export const QUALITY_TIERS: readonly Quality[] = ['HI_RES', 'LOSSLESS', 'HIGH', 'LOW'];
 const KNOWN_SOURCES: readonly KnownSource[] = [
-  'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'instable',
+  'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'bitchordhires', 'instable',
 ];
 
 export interface Config {
@@ -23,6 +23,7 @@ export interface Config {
   monochromeBaseUrl?: string;
   deezerBaseUrl?: string;
   eljohnzcBaseUrl?: string;
+  bitchordHiresBaseUrl?: string;
   instableBaseUrl?: string;
   instableSearchPath?: string;
   instableStreamPath?: string;
@@ -35,7 +36,9 @@ export interface Config {
   instableApiToken?: string;
   instableUserAgent?: string;
   enabledSources: Set<KnownSource>;
+  rootEnabledSources?: Set<KnownSource>;
   sourceSearchTimeoutMs: number;
+  remoteAddonTimeoutMs?: number;
   sourceHealthTimeoutMs: number;
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
@@ -152,10 +155,13 @@ export function loadConfig(): Config {
     apiToken: process.env.QOBUZ_API_TOKEN,
     lastBabeBaseUrl: process.env.LASTBABE_BASE_URL?.trim() || 'https://lastbabe.velixir.run',
     monochromeBaseUrl: process.env.MONOCHROME_BASE_URL?.trim() || 'https://tracks.monochrome.st',
-    deezerBaseUrl: process.env.DEEZER_BASE_URL?.trim() || 'https://bitchord-hires-addon.vercel.app',
+    deezerBaseUrl: process.env.DEEZER_BASE_URL?.trim() || 'https://bitchord-hires-addon.de.deplexo.com',
     eljohnzcBaseUrl:
       process.env.ELJOHNZC_BASE_URL?.trim() ||
-      'https://gglos.geisselgottes.cfd/u/eyJ2IjoxLCJzcmMiOlsicSJdLCJxIjpbIkxPU1NMRVNTIiwiSElHSCIsIkxPVyJdLCJhdG1vcyI6Im9mZiIsImhpZGUiOnsibWluU2VjIjozMH19',
+      'https://eljohnzc-addon.de.deplexo.com/59efe06a96',
+    bitchordHiresBaseUrl:
+      process.env.BITCHORD_HIRES_BASE_URL?.trim() ||
+      'https://bitchord-hires-addon.de.deplexo.com',
     instableBaseUrl: process.env.INSTABLE_BASE_URL?.trim() || 'https://instable.arcod.xyz',
     instableSearchPath: process.env.INSTABLE_SEARCH_PATH?.trim(),
     instableStreamPath: process.env.INSTABLE_STREAM_PATH?.trim(),
@@ -168,7 +174,12 @@ export function loadConfig(): Config {
     instableApiToken: process.env.INSTABLE_API_TOKEN?.trim(),
     instableUserAgent: process.env.INSTABLE_USER_AGENT?.trim(),
     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),
+    rootEnabledSources: parseEnabledSources(process.env.EMIKA_ROOT_SOURCES ?? process.env.QOBUZ_ENABLED_SOURCES),
     sourceSearchTimeoutMs,
+    remoteAddonTimeoutMs: Math.min(
+      positiveInt('REMOTE_ADDON_TIMEOUT_MS', 8000),
+      serverRequestTimeoutMs,
+    ),
     sourceHealthTimeoutMs: positiveInt(
       'SOURCE_HEALTH_TIMEOUT_MS',
       Math.min(requestTimeoutMs, serverRequestTimeoutMs),
