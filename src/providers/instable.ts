@@ -246,9 +246,11 @@ function toTrack(raw: RecordValue, requested: Quality, hiResEnabled: boolean): Q
   const maximumSamplingRate = typeof raw.maximum_sampling_rate === 'number' ? raw.maximum_sampling_rate : undefined;
   const hires    = raw.hires === true;
 
-  const suppressHiResMetadata = requested === 'LOSSLESS' && !hiResEnabled && hires;
+  const isHighQuality = requested === 'HIGH';
+  const suppressHiResMetadata = isHighQuality || requested === 'LOSSLESS' && !hiResEnabled && hires;
   let audioQuality: string | undefined;
-  if (hires && !suppressHiResMetadata) audioQuality = 'HI_RES_LOSSLESS';
+  if (isHighQuality) audioQuality = 'HIGH';
+  else if (hires && !suppressHiResMetadata) audioQuality = 'HI_RES_LOSSLESS';
   else if (bitDepth !== undefined && bitDepth >= 16) audioQuality = 'LOSSLESS';
 
   return {
@@ -259,7 +261,7 @@ function toTrack(raw: RecordValue, requested: Quality, hiResEnabled: boolean): Q
     duration:   typeof raw.duration === 'number' ? raw.duration : undefined,
     isrc:       stringValue(raw.isrc ?? raw.ISRC ?? raw.isrc_code),
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
-    format:     bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
+    format:     isHighQuality ? 'mp3' : bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
     audioQuality,
     sampleRate: !suppressHiResMetadata && maximumSamplingRate !== undefined
       ? (maximumSamplingRate < 1000 ? maximumSamplingRate * 1000 : maximumSamplingRate)

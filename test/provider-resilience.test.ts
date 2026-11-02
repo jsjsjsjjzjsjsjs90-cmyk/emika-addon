@@ -240,6 +240,28 @@ test('Instable receives atmos=on and HI_RES quality id 27 on search and stream',
   }
 });
 
+test('Instable search does not label HIGH results as Hi-Res', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ tracks: [{
+    id: 'high-42', title: 'High Track', maximum_sampling_rate: 192,
+    maximum_bit_depth: 24, hires: true,
+  }] }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({ instableBaseUrl: 'https://instable.example.test' }));
+    const tracks = await provider.search('high track', 'HIGH', 'off');
+    assert.equal(tracks[0]?.format, 'mp3');
+    assert.equal(tracks[0]?.audioQuality, 'HIGH');
+    assert.equal(tracks[0]?.sampleRate, undefined);
+    assert.equal(tracks[0]?.bitDepth, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Instable maps Qobuz LOSSLESS to quality id 6 instead of the Hi-Res id', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];
