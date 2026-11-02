@@ -433,7 +433,8 @@ function registerAddon(
 function manifestAllowsDownloads(namespace?: string): boolean {
   if (!config.allowDownloads || config.downloadSources.size === 0) return false;
   if (namespace) return config.downloadSources.has(namespace as IsolatedSource);
-  return [...config.enabledSources].every((source) => config.downloadSources.has(source));
+  const rootSources = config.rootEnabledSources ?? config.enabledSources;
+  return [...rootSources].every((source) => config.downloadSources.has(source));
 }
 
 function searchTimeoutFor(namespace?: string): number {
