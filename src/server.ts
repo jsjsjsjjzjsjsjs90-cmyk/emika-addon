@@ -494,7 +494,7 @@ function normalizeAlias(value: string): string {
 }
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('operation timed out')), timeoutMs);
+    const timer = setTimeout(() => reject(new AppError(504, 'upstream service timeout')), timeoutMs);
     promise.then(resolve, reject).finally(() => clearTimeout(timer));
   });
 }

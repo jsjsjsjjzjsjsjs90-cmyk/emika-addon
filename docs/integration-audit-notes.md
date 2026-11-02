@@ -46,3 +46,9 @@
 - hifi-api: https://github.com/binimum/hifi-api
 - Eclipse Music addon guide: https://eclipsemusic.app/
 - Mornye docs/repository: https://mornye.com/docs and https://github.com/mornyeapp/Mornye-Extension.git
+
+## Vercel production log audit
+
+หลังเชื่อมทีม Vercel พบว่าในช่วง 30 นาทีล่าสุดมี runtime records ระดับ info 200 รายการ และไม่พบ runtime error/fatal/warning ที่ถูกบันทึกโดย logger. Request records มี 200 จำนวน 166 รายการ, 206 จำนวน 2 รายการ, 404 จำนวน 15 รายการ, 502 จำนวน 1 รายการ และ 500 จำนวน 5 รายการ. กลุ่ม 404 เป็น media request ซ้ำของ stream ที่หมดอายุหรือหา rendition ไม่ได้ ส่วน 502 เป็น stream ที่ใช้เวลา 6 วินาทีจน upstream ไม่พร้อมใช้งาน. กลุ่ม 500 ของ search ใช้เวลาประมาณ 3.5–5 วินาทีและตรงกับ source timeout.
+
+แก้แล้วโดยเปลี่ยน timeout ภายในจาก generic HTTP 500 เป็น `504 upstream service timeout` เพื่อให้ BitChord/LastWave แยก upstream timeout ออกจาก server bug ได้ถูกต้อง การแก้ไขนี้ผ่าน unit tests และ TypeScript build แล้ว และต้องรอ production deployment ใหม่ก่อนตรวจ status code ใน Vercel logs อีกครั้ง.
