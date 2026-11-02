@@ -99,7 +99,7 @@ app.get('/health', async () => ({
   downloadSources: [...config.downloadSources],
 }));
 
-app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
+app.get<{ Querystring: { q?: string } }>('/health/sources', async (request, reply) => {
   const testQuery = normalizeHealthQuery(request.query.q, config.maxQueryLength);
   const sourceNames: IsolatedSource[] = [
     'qobuzdl', 'lastbabe', 'monochrome', 'deezer', 'eljohnzc', 'bitchordhires', 'instable',
@@ -119,10 +119,11 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
       }
       const provider = createSourceProvider(config, sourceName);
       const started = Date.now();
+      const healthTimeoutMs = healthTimeoutFor(sourceName);
       try {
         const tracks = await withTimeout(
           provider.search(testQuery, healthQuality(), 'auto'),
-          config.sourceHealthTimeoutMs,
+          healthTimeoutMs,
         );
         const searchLatencyMs = Date.now() - started;
         if (tracks.length === 0) {
@@ -143,7 +144,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
         let attempts = 0;
         let streamHealthy = false;
         for (const track of candidates) {
-          const remainingMs = config.sourceHealthTimeoutMs - (Date.now() - started);
+          const remainingMs = healthTimeoutMs - (Date.now() - started);
           if (remainingMs <= 0) break;
           attempts += 1;
           const streamStarted = Date.now();
@@ -201,6 +202,7 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
     (r) => r.status !== 'disabled_by_config',
   );
   const healthy = enabled.filter((r) => r.status === 'healthy').length;
+  const unhealthy = enabled.length - healthy;
 
   let overallStatus = 'outage';
   if (enabled.length === 0) overallStatus = 'no_sources_enabled';
@@ -208,15 +210,16 @@ app.get<{ Querystring: { q?: string } }>('/health/sources', async (request) => {
   else if (healthy >= Math.ceil(enabled.length / 2)) overallStatus = 'operational_with_minor_outages';
   else if (healthy >= 1) overallStatus = 'degraded_but_functional';
 
-  return {
+  return reply.header('Cache-Control', 'private, no-store').send({
     timestamp: new Date().toISOString(),
     testQuery,
     overallStatus,
     enabledSources: enabled.length,
     healthySources: healthy,
+    unhealthySources: unhealthy,
     totalSources: results.length,
     providers: results,
-  };
+  });
 });
 
 registerAddon('/',    createProvider(config),                     manifests.root);
@@ -442,6 +445,13 @@ function searchTimeoutFor(namespace?: string): number {
     return config.remoteAddonTimeoutMs ?? config.sourceSearchTimeoutMs;
   }
   return config.sourceSearchTimeoutMs;
+}
+
+function healthTimeoutFor(source: IsolatedSource): number {
+  if (source === 'eljohnzc' || source === 'bitchordhires') {
+    return config.remoteAddonTimeoutMs ?? config.sourceHealthTimeoutMs;
+  }
+  return config.sourceHealthTimeoutMs;
 }
 
 function manifestQualityOptions(): Array<{ label: string; value: string }> {
