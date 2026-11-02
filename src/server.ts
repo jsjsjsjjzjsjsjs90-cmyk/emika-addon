@@ -36,8 +36,9 @@ app.addHook('onRequest', async (request, reply) => {
     return reply.code(403).send({ error: 'BitChord User-Agent required' });
   }
   if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/media/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;
-  const forwardedFor = request.headers['x-forwarded-for'];
-  const result = limiter.check(clientKey(request.ip, typeof forwardedFor === 'string' ? forwardedFor : undefined));
+  // Fastify/Vercel supplies request.ip from the platform boundary. Do not trust
+  // a caller-provided X-Forwarded-For value: it would allow a new bucket per request.
+  const result = limiter.check(clientKey(request.ip));
   reply.header('X-RateLimit-Limit', result.limit);
   reply.header('X-RateLimit-Remaining', result.remaining);
   reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
@@ -304,7 +305,7 @@ function registerAddon(
           .send({ tracks });
       } catch (error) {
         const stale = searchCache.getStale(key);
-        if (stale) {
+        if (stale !== undefined) {
           return reply
             .header(
               'Cache-Control',
@@ -368,15 +369,24 @@ function registerAddon(
       if (!upstreamId) throw notFound('track not available');
       const stream = await resolveStream(provider, streamCache, upstreamId, quality, atmos);
       if (!stream) throw notFound('track not available');
-      const response = await withTimeout(fetch(stream.url), config.serverRequestTimeoutMs);
-      if (!response.ok || !response.body) throw notFound('download is not available');
+      const downloadHeaders: Record<string, string> = {};
+      if (request.headers.range) downloadHeaders.range = request.headers.range;
+      const response = await withTimeout(fetch(stream.url, { headers: downloadHeaders }), config.serverRequestTimeoutMs);
+      if (!response.body) throw new AppError(502, 'download is not available');
+      if (!response.ok && response.status !== 416) {
+        throw new AppError(response.status >= 500 ? 502 : response.status, 'download is not available');
+      }
       const filename = downloadFilename(request.query.filename || trackNames.get(id), stream.format);
       const asciiFilename = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+      reply.code(response.status);
       reply.header('Cache-Control', 'no-store');
+      reply.header('Accept-Ranges', response.headers.get('accept-ranges') ?? 'bytes');
       reply.header('Content-Type', response.headers.get('content-type') ?? 'application/octet-stream');
       reply.header('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
       const length = response.headers.get('content-length');
       if (length) reply.header('Content-Length', length);
+      const range = response.headers.get('content-range');
+      if (range) reply.header('Content-Range', range);
       return reply.send(Readable.fromWeb(response.body as any));
     },
   );
@@ -396,7 +406,10 @@ function registerAddon(
       const headers: Record<string, string> = {};
       if (request.headers.range) headers.range = request.headers.range;
       const response = await withTimeout(fetch(stream.url, { headers }), config.serverRequestTimeoutMs);
-      if (!response.ok || !response.body) throw notFound('media is not available');
+      if (!response.body) throw new AppError(502, 'media is not available');
+      if (!response.ok && response.status !== 416) {
+        throw new AppError(response.status >= 500 ? 502 : response.status, 'media is not available');
+      }
       const normalized = streamResponse(stream, quality);
       const filename = downloadFilename(request.query.filename || trackNames.get(id), normalized.format);
       const asciiFilename = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
@@ -467,7 +480,17 @@ async function resolveStream(
   atmos: string,
 ): Promise<Awaited<ReturnType<QobuzProvider['getStream']>>> {
   const key = `${upstreamId}\u0000${quality}\u0000${atmos}`;
-  return cache.getOrLoad(key, () => withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs));
+  return cache.getOrLoad(
+    key,
+    () => withTimeout(provider.getStream(upstreamId, quality, atmos), config.serverRequestTimeoutMs),
+    (stream) => streamCacheTtl(stream?.expiresAt),
+  );
+}
+
+function streamCacheTtl(expiresAt?: number): number {
+  if (!Number.isFinite(expiresAt) || !expiresAt || expiresAt <= 0) return config.cacheTtlMs;
+  const expiresAtMs = expiresAt < 1_000_000_000_000 ? expiresAt * 1000 : expiresAt;
+  return Math.min(config.cacheTtlMs, Math.max(1_000, expiresAtMs - Date.now() - 5_000));
 }
 
 app.setErrorHandler((error, _request, reply) => {

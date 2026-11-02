@@ -15,6 +15,12 @@ test('signed IDs reject tampering', () => {
   assert.equal(upstreamIdFromPublicId(`${id.slice(0, -1)}x`), undefined);
 });
 
+test('root IDs reject namespaced payloads', () => {
+  const isolated = normalizeTrack({ upstreamId: '123', title: 'Song' }, undefined, 'instable').id;
+  assert.equal(upstreamIdFromPublicId(isolated), undefined);
+  assert.equal(upstreamIdFromPublicId(isolated, undefined, 'instable'), '123');
+});
+
 test('cache exposes stale values for outage fallback', async () => {
   const cache = new TtlCache<string>(1);
   cache.set('key', 'value');
@@ -60,4 +66,12 @@ test('normalizes Dolby DASH transport and E-AC-3 JOC aliases', () => {
     container: undefined, manifest: 'dash', encrypted: false, sampleRate: undefined, bitDepth: undefined,
     bitrate: undefined, audioMode: 'DOLBY_ATMOS', atmos: true,
   });
+});
+
+test('normalizes documented kHz and kbps shorthand to base units', () => {
+  const normalized = streamResponse({
+    url: 'https://cdn.example/a.flac', format: 'flac', sampleRate: 96, bitrate: 320,
+  }, 'LOSSLESS');
+  assert.equal(normalized.sampleRate, 96000);
+  assert.equal(normalized.bitrate, 320000);
 });

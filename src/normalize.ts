@@ -20,7 +20,7 @@ export function upstreamIdFromPublicId(id: string, secret = DEFAULT_ID_SECRET, n
   if (a.length !== b.length || !timingSafeEqual(a, b)) return undefined;
   try {
     const payload = Buffer.from(encoded, 'base64url').toString('utf8');
-    if (!namespace) return payload.trim() || undefined;
+    if (!namespace) return payload.includes('\u0000') ? undefined : payload.trim() || undefined;
     const separator = payload.indexOf('\u0000');
     if (separator <= 0 || payload.slice(0, separator) !== namespace) return undefined;
     return payload.slice(separator + 1).trim() || undefined;
@@ -38,7 +38,7 @@ export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: s
     artworkURL: absoluteUrl(track.artworkURL), streamURL: absoluteUrl(track.streamURL), format: track.format?.toLowerCase(),
     audioQuality: track.audioQuality?.trim(), audioMode: track.audioMode?.trim(),
     audioModes: track.audioModes, atmos: track.atmos,
-    sampleRate: positiveNumber(track.sampleRate), bitDepth: positiveInteger(track.bitDepth), bitrate: positiveNumber(track.bitrate),
+    sampleRate: normalizeSampleRate(track.sampleRate), bitDepth: positiveInteger(track.bitDepth), bitrate: normalizeBitrate(track.bitrate),
   };
 }
 
@@ -57,9 +57,9 @@ export function streamResponse(stream: QobuzStream, requested: Quality): QobuzSt
     manifest: stream.manifest ?? inferredManifest(format),
     encrypted: stream.encrypted ?? false,
     ...(positiveNumber(stream.expiresAt) ? { expiresAt: positiveNumber(stream.expiresAt) } : {}),
-    sampleRate: positiveNumber(stream.sampleRate),
+    sampleRate: normalizeSampleRate(stream.sampleRate),
     bitDepth: positiveInteger(stream.bitDepth),
-    bitrate: positiveNumber(stream.bitrate),
+    bitrate: normalizeBitrate(stream.bitrate),
   };
 }
 
@@ -104,6 +104,18 @@ function positiveNumber(value?: number): number | undefined {
 
 function positiveInteger(value?: number): number | undefined {
   return positiveNumber(value) && Number.isInteger(value) ? value : undefined;
+}
+
+function normalizeSampleRate(value?: number): number | undefined {
+  const normalized = positiveNumber(value);
+  if (normalized === undefined) return undefined;
+  return normalized < 1000 ? normalized * 1000 : normalized;
+}
+
+function normalizeBitrate(value?: number): number | undefined {
+  const normalized = positiveNumber(value);
+  if (normalized === undefined) return undefined;
+  return normalized < 10000 ? normalized * 1000 : normalized;
 }
 
 function normalizeIsrc(value?: string): string | undefined {

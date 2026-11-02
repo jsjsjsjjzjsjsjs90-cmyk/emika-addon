@@ -11,23 +11,23 @@ export class TtlCache<V> {
   getStale(key: string): V | undefined {
     return this.values.get(key)?.value;
   }
-  async getOrLoad(key: string, loader: () => Promise<V>): Promise<V> {
+  async getOrLoad(key: string, loader: () => Promise<V>, ttlMs: number | ((value: V) => number) = this.ttlMs): Promise<V> {
     const cached = this.get(key);
     if (cached !== undefined) return cached;
     const existing = this.inflight.get(key);
     if (existing) return existing;
     const pending = loader().then((value) => {
-      this.set(key, value);
+      this.set(key, value, typeof ttlMs === 'function' ? ttlMs(value) : ttlMs);
       return value;
     }).finally(() => this.inflight.delete(key));
     this.inflight.set(key, pending);
     return pending;
   }
-  set(key: string, value: V): void {
+  set(key: string, value: V, ttlMs = this.ttlMs): void {
     for (const [entryKey, entry] of this.values) {
       if (entry.expiresAt <= Date.now()) this.values.delete(entryKey);
     }
     if (this.values.size >= this.maxEntries && !this.values.has(key)) this.values.delete(this.values.keys().next().value as string);
-    this.values.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+    this.values.set(key, { value, expiresAt: Date.now() + Math.max(1, ttlMs) });
   }
 }

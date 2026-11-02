@@ -250,7 +250,8 @@ function toTrack(raw: RecordValue, requested: Quality, hiResEnabled: boolean): Q
   const hires    = raw.hires === true;
 
   const isHighQuality = requested === 'HIGH';
-  const suppressHiResMetadata = isHighQuality || requested === 'LOSSLESS' && !hiResEnabled && hires;
+  const hasHiResEvidence = hires || (maximumSamplingRate ?? 0) > 48000 || (bitDepth ?? 0) > 16;
+  const suppressHiResMetadata = isHighQuality || requested === 'LOSSLESS' && !hiResEnabled && hasHiResEvidence;
   let audioQuality: string | undefined;
   if (isHighQuality) audioQuality = 'HIGH';
   else if (hires && !suppressHiResMetadata) audioQuality = 'HI_RES_LOSSLESS';

@@ -58,7 +58,7 @@ export class RemoteAddonProvider implements QobuzProvider {
     const direct = this.directStreams.get(trackId) ?? this.directStreams.get(cleanId);
     const directQuality = normalizeQuality(direct?.quality);
     const requestedAtmos = normalizeAtmos(atmos);
-    if (direct && direct.expiresAt > Date.now() && direct.atmos === requestedAtmos && (!directQuality || directQuality === quality)) {
+    if (direct && direct.expiresAt > Date.now() && direct.atmos === requestedAtmos && directQuality === quality) {
       const response: QobuzStream = {
         url: direct.url,
         format: direct.format,
