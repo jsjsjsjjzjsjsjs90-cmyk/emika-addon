@@ -52,3 +52,9 @@
 หลังเชื่อมทีม Vercel พบว่าในช่วง 30 นาทีล่าสุดมี runtime records ระดับ info 200 รายการ และไม่พบ runtime error/fatal/warning ที่ถูกบันทึกโดย logger. Request records มี 200 จำนวน 166 รายการ, 206 จำนวน 2 รายการ, 404 จำนวน 15 รายการ, 502 จำนวน 1 รายการ และ 500 จำนวน 5 รายการ. กลุ่ม 404 เป็น media request ซ้ำของ stream ที่หมดอายุหรือหา rendition ไม่ได้ ส่วน 502 เป็น stream ที่ใช้เวลา 6 วินาทีจน upstream ไม่พร้อมใช้งาน. กลุ่ม 500 ของ search ใช้เวลาประมาณ 3.5–5 วินาทีและตรงกับ source timeout.
 
 แก้แล้วโดยเปลี่ยน timeout ภายในจาก generic HTTP 500 เป็น `504 upstream service timeout` เพื่อให้ BitChord/LastWave แยก upstream timeout ออกจาก server bug ได้ถูกต้อง การแก้ไขนี้ผ่าน unit tests และ TypeScript build แล้ว และต้องรอ production deployment ใหม่ก่อนตรวจ status code ใน Vercel logs อีกครั้ง.
+
+## Final production verification after environment update
+
+หลังปรับ Production Environment Variables และ redeploy แล้ว BitChord `BitChord/v1.9` และ LastWave `LastWave-Player/1.0` ค้นหาได้ HTTP 200 และคืนผลลัพธ์ 10 tracks. ทั้งสอง client เรียก `/stream/:id` ได้ HTTP 200 พร้อม `format=flac`, `quality=HI_RES` และ direct upstream URL. Browser flow ได้ `/media/:id` ตามที่ออกแบบไว้ และ Range request ได้ HTTP 206 พร้อม `Content-Range`, `Content-Length`, `Accept-Ranges` และชื่อไฟล์ `Final Client Audit.flac`.
+
+การตรวจ input ผิดรูปแบบได้ผลตามสัญญา: quality ที่ไม่รู้จักตอบ HTTP 400 และ track ID ที่ผิดรูปแบบตอบ HTTP 404. Logs ช่วงหลัง smoke test พบ request 200 จำนวน 1 รายการและไม่พบ 4xx/5xx หรือ runtime error ใหม่. Unit tests ยังคงผ่าน 56/56 และ TypeScript build ผ่าน.
