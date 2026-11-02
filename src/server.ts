@@ -27,13 +27,13 @@ const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
   const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/') || pathname.includes('/media/') || pathname.includes('/download/');
-  const hasNativeClientIdentity = isSupportedNativeUserAgent(request.headers['user-agent']);
+  const hasBitChordIdentity = isBitChordUserAgent(request.headers['user-agent']);
   const hasUiSession = config.allowSignedUiSession && verifyUiSession(
     readCookie(request.headers.cookie, UI_SESSION_COOKIE),
     config.idSecret,
   );
-  if (config.requireBitChordUserAgent && isAddonResource && !hasNativeClientIdentity && !hasUiSession) {
-    return reply.code(403).send({ error: 'BitChord or LastWave User-Agent required' });
+  if (config.requireBitChordUserAgent && isAddonResource && !hasBitChordIdentity && !hasUiSession) {
+    return reply.code(403).send({ error: 'BitChord User-Agent required' });
   }
   if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/media/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;
   const forwardedFor = request.headers['x-forwarded-for'];
