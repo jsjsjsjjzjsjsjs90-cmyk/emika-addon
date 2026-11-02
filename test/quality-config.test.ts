@@ -88,3 +88,37 @@ test('Signed UI Session settings are disabled by default and configurable', () =
     else process.env.EMIKA_UI_SESSION_TTL_SECONDS = previousTtl;
   }
 });
+
+test('stream routing defaults to proxy and enables native direct modes independently', () => {
+  const previous = {
+    proxy: process.env.EMIKA_PROXY_WEB_MEDIA,
+    bitChord: process.env.EMIKA_DIRECT_STREAM_BITCHORD,
+    lastWave: process.env.EMIKA_DIRECT_STREAM_LASTWAVE,
+  };
+  try {
+    delete process.env.EMIKA_PROXY_WEB_MEDIA;
+    delete process.env.EMIKA_DIRECT_STREAM_BITCHORD;
+    delete process.env.EMIKA_DIRECT_STREAM_LASTWAVE;
+    let config = loadConfig();
+    assert.equal(config.proxyWebMedia, true);
+    assert.equal(config.directStreamBitChord, false);
+    assert.equal(config.directStreamLastWave, false);
+
+    process.env.EMIKA_PROXY_WEB_MEDIA = '0';
+    process.env.EMIKA_DIRECT_STREAM_BITCHORD = '1';
+    process.env.EMIKA_DIRECT_STREAM_LASTWAVE = '1';
+    config = loadConfig();
+    assert.equal(config.proxyWebMedia, false);
+    assert.equal(config.directStreamBitChord, true);
+    assert.equal(config.directStreamLastWave, true);
+  } finally {
+    for (const [key, value] of Object.entries({
+      EMIKA_PROXY_WEB_MEDIA: previous.proxy,
+      EMIKA_DIRECT_STREAM_BITCHORD: previous.bitChord,
+      EMIKA_DIRECT_STREAM_LASTWAVE: previous.lastWave,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

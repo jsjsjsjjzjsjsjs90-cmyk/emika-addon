@@ -26,13 +26,13 @@ const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
   const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/') || pathname.includes('/media/') || pathname.includes('/download/');
-  const hasBitChordIdentity = isBitChordUserAgent(request.headers['user-agent']);
+  const hasNativeClientIdentity = isSupportedNativeUserAgent(request.headers['user-agent']);
   const hasUiSession = config.allowSignedUiSession && verifyUiSession(
     readCookie(request.headers.cookie, UI_SESSION_COOKIE),
     config.idSecret,
   );
-  if (config.requireBitChordUserAgent && isAddonResource && !hasBitChordIdentity && !hasUiSession) {
-    return reply.code(403).send({ error: 'BitChord User-Agent required' });
+  if (config.requireBitChordUserAgent && isAddonResource && !hasNativeClientIdentity && !hasUiSession) {
+    return reply.code(403).send({ error: 'BitChord or LastWave User-Agent required' });
   }
   if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/media/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;
   const result = limiter.check(clientKey(request.ip));
@@ -47,6 +47,14 @@ app.addHook('onRequest', async (request, reply) => {
 
 function isBitChordUserAgent(userAgent: string | undefined): boolean {
   return typeof userAgent === 'string' && /^BitChord\/[\w.-]+$/i.test(userAgent.trim());
+}
+
+function isLastWaveUserAgent(userAgent: string | undefined): boolean {
+  return typeof userAgent === 'string' && /(?:^|\s)LastWave\/[\w.-]+(?:\s|$)/i.test(userAgent.trim());
+}
+
+function isSupportedNativeUserAgent(userAgent: string | undefined): boolean {
+  return isBitChordUserAgent(userAgent) || isLastWaveUserAgent(userAgent);
 }
 
 const manifests = {
@@ -314,6 +322,13 @@ function registerAddon(
         const forwardedProtocol = request.headers['x-forwarded-proto'];
         const protocol = forwardedProtocol === 'http' ? 'http' : 'https';
         const origin = `${protocol}://${request.headers.host ?? 'localhost'}`;
+        const userAgent = request.headers['user-agent'];
+        const directForNativeClient =
+          (config.directStreamBitChord && isBitChordUserAgent(userAgent)) ||
+          (config.directStreamLastWave && isLastWaveUserAgent(userAgent));
+        if (directForNativeClient || !config.proxyWebMedia) {
+          return reply.header('Cache-Control', 'no-store').send({ ...normalized, url: stream.url });
+        }
         const mediaUrl = new URL(route(`/media/${encodeURIComponent(id)}`), origin);
         mediaUrl.searchParams.set('quality', quality.toLowerCase());
         mediaUrl.searchParams.set('atmos', atmos);

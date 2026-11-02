@@ -47,6 +47,9 @@ export interface Config {
   allowSignedUiSession: boolean;
   uiSessionTtlSeconds: number;
   userAgent: string;
+  proxyWebMedia: boolean;
+  directStreamBitChord: boolean;
+  directStreamLastWave: boolean;
   downloadSources: Set<KnownSource>;
   enabledQualityTiers: Set<Quality>;
 }
@@ -180,6 +183,9 @@ export function loadConfig(): Config {
     allowSignedUiSession: parseZeroOneFlag(process.env.EMIKA_ALLOW_SIGNED_UI_SESSION),
     uiSessionTtlSeconds: positiveInt('EMIKA_UI_SESSION_TTL_SECONDS', 3600),
     userAgent: process.env.EMIKA_USER_AGENT?.trim() || 'BitChord/v1.9',
+    proxyWebMedia: parseZeroOneFlag(process.env.EMIKA_PROXY_WEB_MEDIA, true),
+    directStreamBitChord: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_BITCHORD),
+    directStreamLastWave: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_LASTWAVE),
     downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),
     enabledQualityTiers: parseEnabledQualityTiers(process.env.EMIKA_DISABLED_QUALITY_TIERS),
   };
