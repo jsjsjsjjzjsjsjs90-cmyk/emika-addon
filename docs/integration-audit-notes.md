@@ -68,3 +68,7 @@
 ผล local integration: `/e/manifest.json` และ `/g/manifest.json` ตอบ HTTP 200; source ใหม่ทั้งสองค้นหาได้เมื่อเปิดใน `QOBUZ_ENABLED_SOURCES`; root search ยังคงแยกใช้ root source policy. Contract ที่ยึดใช้คือ HTTPS, JSON, URL-encoded path/query, `encrypted=false`, metadata ตาม stream จริง และไม่เก็บ signed URL/token ถาวร.
 
 ผล multi-method สรุปว่า wire contract สามารถนำมาทำ adapter ได้ แต่ยังไม่ควรอ้างว่า source ใหม่มีสิทธิ์ดาวน์โหลดหรือรองรับ Hi-Res ทุกเพลงจาก label เพียงอย่างเดียว. Eclipse ใช้เป็น reference ด้าน addon contract เท่านั้น ไม่ได้ยืนยันว่าเป็น audio source ของ Emika. hifi-api ใช้เป็น reference ด้าน capability-based metadata/expiry/error handling ไม่ได้นำโค้ดหรือ credential มาใช้.
+
+## Download capability verification — 2026-11-03
+
+Production ทดสอบ `/download/:id` ของ source ใหม่ทั้งสองแล้ว: BitChord Hi-Res ส่ง `audio/flac` จริง รองรับ `206 Range` และตั้งชื่อไฟล์ `.flac` ถูกต้อง. Eljohnzc ส่ง `application/dash+xml` เป็น MPEG-DASH manifest (`.mpd/.dash`) ไม่ใช่ไฟล์เสียงเดี่ยว แม้ดาวน์โหลดได้ก็จะเป็น manifest ที่เปิดฟังแบบไฟล์ FLAC ไม่ได้ จึงตั้ง `EMIKA_DOWNLOAD_SOURCES=instable,bitchordhires` และคง Eljohnzc เป็น playback-only แทนการปลอมชื่อไฟล์หรือประกอบ segment ใน serverless proxy.
