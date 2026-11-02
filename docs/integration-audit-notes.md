@@ -72,3 +72,11 @@
 ## Download capability verification — 2026-11-03
 
 Production ทดสอบ `/download/:id` ของ source ใหม่ทั้งสองแล้ว: BitChord Hi-Res ส่ง `audio/flac` จริง รองรับ `206 Range` และตั้งชื่อไฟล์ `.flac` ถูกต้อง. Eljohnzc ส่ง `application/dash+xml` เป็น MPEG-DASH manifest (`.mpd/.dash`) ไม่ใช่ไฟล์เสียงเดี่ยว แม้ดาวน์โหลดได้ก็จะเป็น manifest ที่เปิดฟังแบบไฟล์ FLAC ไม่ได้ จึงตั้ง `EMIKA_DOWNLOAD_SOURCES=instable,bitchordhires` และคง Eljohnzc เป็น playback-only แทนการปลอมชื่อไฟล์หรือประกอบ segment ใน serverless proxy.
+
+## Root Racing production verification — 2026-11-03
+
+เปิด `EMIKA_ROOT_SOURCES=instable,eljohnzc,bitchordhires` ในทั้ง public และ private Production โดยใช้ Racing แบบ first healthy source wins. ปรับ `SOURCE_SEARCH_TIMEOUT_MS=8000` และ `REQUEST_TIMEOUT_MS=8000` เพื่อให้ remote source มี deadline เพียงพอโดยไม่รอ source อื่นหลังมีผลลัพธ์แรก.
+
+ทดสอบ 4 queries ต่อโปรเจกต์: search ทุกคำค้นตอบ HTTP 200 และใช้เวลาประมาณ 0.28–2.07 วินาที; stream ของผลลัพธ์ทุกตัวตอบ HTTP 200. ผล stream มีทั้ง direct FLAC (`format=flac`, `manifest=none`, 24-bit ในบางรายการ) และ MPEG-DASH FLAC (`format=dash`, `manifest=dash`, 16-bit/44.1 kHz) ตาม source ที่ชนะจริง. Production request logs หลังทดสอบไม่พบ 4xx/5xx และ runtime logs ไม่พบ exception, unhandled error, fatal หรือ timeout.
+
+หมายเหตุ: เมื่อ root Racing เลือก Eljohnzc ผล stream อาจเป็น DASH และ root manifest จะไม่ประกาศดาวน์โหลด เพราะ configured root sources มี source ที่เป็น playback-only; ให้ใช้ `/g` หรือ Instable สำหรับ direct-audio download.
