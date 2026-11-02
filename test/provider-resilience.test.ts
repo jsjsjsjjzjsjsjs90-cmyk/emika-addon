@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RemoteAddonProvider } from '../src/providers/remote-addon.js';
 import { InstableProvider } from '../src/providers/instable.js';
+import { QobuzDlProvider } from '../src/providers/qobuzdl.js';
 import { RacingProvider } from '../src/providers/racing.js';
 import { normalizeHealthQuery } from '../src/query.js';
 import type { Config } from '../src/config.js';
-import type { QobuzProvider } from '../src/types.js';
+import type { QobuzProvider, Quality } from '../src/types.js';
 
 function config(overrides: Partial<Config> = {}): Config {
   return {
@@ -29,6 +30,7 @@ function config(overrides: Partial<Config> = {}): Config {
     requireBitChordUserAgent: false,
     userAgent: 'BitChord/v1.9',
     downloadSources: new Set(),
+    enabledQualityTiers: new Set<Quality>(['HI_RES', 'LOSSLESS', 'HIGH', 'LOW']),
     deezerBaseUrl: 'https://fallback.example.test',
     ...overrides,
   };
@@ -261,6 +263,27 @@ test('Instable maps Qobuz LOSSLESS to quality id 6 instead of the Hi-Res id', as
   }
 });
 
+test('Qobuz-DL keeps LOSSLESS on quality id 6 and HI_RES on 27', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    requests.push(String(input));
+    return new Response(JSON.stringify({ data: { url: 'https://media.example.test/track.flac' } }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new QobuzDlProvider(config({ apiBaseUrl: 'https://qobuz.example.test' }));
+    await provider.getStream('42', 'LOSSLESS', 'off');
+    await provider.getStream('42', 'HI_RES', 'off');
+    assert.equal(requests[0], 'https://qobuz.example.test/api/download-music?track_id=42&quality=6');
+    assert.equal(requests[1], 'https://qobuz.example.test/api/download-music?track_id=42&quality=27');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Instable upgrades BitChord LOSSLESS to quality id 27 for a searched Hi-Res track', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];
@@ -292,6 +315,42 @@ test('Instable upgrades BitChord LOSSLESS to quality id 27 for a searched Hi-Res
     assert.equal(stream?.sampleRate, 96000);
     assert.equal(stream?.bitDepth, 24);
     assert.equal(stream?.audioQuality, 'HI_RES_LOSSLESS');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Instable does not upgrade LOSSLESS when HI_RES is disabled', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (url.includes('/api/search')) {
+      return new Response(JSON.stringify({ tracks: [{
+        id: '42', title: 'Hi-Res Track', maximum_sampling_rate: 44.1,
+        maximum_bit_depth: 24, hires: true,
+      }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({
+      url: 'https://media.example.test/lossless.flac',
+      mimeType: 'audio/flac', sampleRate: 44100, bitDepth: 16,
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({
+      instableBaseUrl: 'https://instable.example.test',
+      enabledQualityTiers: new Set<Quality>(['LOSSLESS', 'HIGH', 'LOW']),
+    }));
+    const tracks = await provider.search('hi-res track', 'LOSSLESS', 'off');
+    assert.equal(tracks[0]?.audioQuality, 'LOSSLESS');
+    assert.equal(tracks[0]?.sampleRate, undefined);
+    assert.equal(tracks[0]?.bitDepth, undefined);
+    const stream = await provider.getStream(tracks[0]!.upstreamId, 'LOSSLESS', 'off');
+    assert.equal(requests[1], 'https://instable.example.test/api/player/stream/42?quality=6&atmos=off');
+    assert.equal(stream?.sampleRate, 44100);
+    assert.equal(stream?.bitDepth, 16);
   } finally {
     globalThis.fetch = originalFetch;
   }

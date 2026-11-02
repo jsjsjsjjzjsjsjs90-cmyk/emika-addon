@@ -63,7 +63,9 @@ export class InstableProvider implements QobuzProvider {
 
     const body = await this.request(this.searchPath, params);
     const items = extractTrackItems(body);
-    const tracks = items.filter(isRecord).map(toTrack).filter((t): t is QobuzTrack => t !== null);
+    const tracks = items.filter(isRecord)
+      .map((item) => toTrack(item, quality, this.config.enabledQualityTiers.has('HI_RES')))
+      .filter((t): t is QobuzTrack => t !== null);
     for (const track of tracks) {
       this.trackMetadata.set(metadataKey(track.upstreamId, quality, atmos), {
         sampleRate: track.sampleRate,
@@ -89,7 +91,7 @@ export class InstableProvider implements QobuzProvider {
     // preceding search identified this exact track as Hi-Res, request the
     // provider's dedicated Hi-Res rendition instead of silently downgrading
     // it to Qobuz quality 6.
-    const effectiveQuality = quality === 'LOSSLESS' && atmos !== 'on' && isHiResMetadata(metadata)
+    const effectiveQuality = quality === 'LOSSLESS' && atmos !== 'on' && this.config.enabledQualityTiers.has('HI_RES') && isHiResMetadata(metadata)
       ? 'HI_RES'
       : quality;
     const qualityId = this.qualityIds[effectiveQuality];
@@ -226,7 +228,7 @@ function isHiResMetadata(metadata: Pick<QobuzTrack, 'sampleRate' | 'bitDepth' | 
     (metadata.bitDepth ?? 0) > 16;
 }
 
-function toTrack(raw: RecordValue): QobuzTrack | null {
+function toTrack(raw: RecordValue, requested: Quality, hiResEnabled: boolean): QobuzTrack | null {
   const id = raw.id;
   const rawTitle = raw.title;
   if ((typeof id !== 'number' && typeof id !== 'string') || typeof rawTitle !== 'string' || !rawTitle.trim()) {
@@ -244,8 +246,9 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
   const maximumSamplingRate = typeof raw.maximum_sampling_rate === 'number' ? raw.maximum_sampling_rate : undefined;
   const hires    = raw.hires === true;
 
+  const suppressHiResMetadata = requested === 'LOSSLESS' && !hiResEnabled && hires;
   let audioQuality: string | undefined;
-  if (hires) audioQuality = 'HI_RES_LOSSLESS';
+  if (hires && !suppressHiResMetadata) audioQuality = 'HI_RES_LOSSLESS';
   else if (bitDepth !== undefined && bitDepth >= 16) audioQuality = 'LOSSLESS';
 
   return {
@@ -258,10 +261,10 @@ function toTrack(raw: RecordValue): QobuzTrack | null {
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
     format:     bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
     audioQuality,
-    sampleRate: maximumSamplingRate !== undefined
+    sampleRate: !suppressHiResMetadata && maximumSamplingRate !== undefined
       ? (maximumSamplingRate < 1000 ? maximumSamplingRate * 1000 : maximumSamplingRate)
       : undefined,
-    bitDepth,
+    bitDepth: suppressHiResMetadata ? undefined : bitDepth,
   };
 }
 

@@ -62,9 +62,9 @@ function delay(ms: number): Promise<void> { return new Promise(resolve => setTim
 
 function qualityId(quality: Quality): string {
   // IDs verified from the Qobuz-DL route schema: 27, 7, 6, and 5.
-  // Lossless uses the app default; HIGH/LOW use its MP3 rendition because
-  // this public endpoint exposes no separate low-bitrate contract.
-  if (quality === 'HI_RES' || quality === 'LOSSLESS') return '27';
+  // Keep CD lossless distinct from the dedicated Hi-Res rendition.
+  if (quality === 'HI_RES') return '27';
+  if (quality === 'LOSSLESS') return '6';
   return '5';
 }
 
