@@ -88,6 +88,12 @@ test('parseAtmos accepts native values and defaults safely', () => {
   assert.equal(parseAtmos('off'), 'off');
 });
 
+test('LastWave native aliases remain accepted by the protocol parser', () => {
+  assert.equal(parseQuality('hi_res'), 'HI_RES');
+  assert.equal(parseQuality('atmos'), 'LOSSLESS');
+  assert.equal(parseAtmos('none'), 'off');
+});
+
 test('parseAtmos rejects unknown values', () => {
   assert.throws(() => parseAtmos('maybe'), /atmos must be auto, on, or off/);
 });

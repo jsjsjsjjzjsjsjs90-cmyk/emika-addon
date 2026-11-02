@@ -189,8 +189,11 @@ export class InstableProvider implements QobuzProvider {
         clearTimeout(timer);
       }
 
-      // exponential backoff + jitter
-      await delay(250 * 2 ** attempt + Math.floor(Math.random() * 200));
+      // Exponential backoff + jitter only when another attempt is scheduled.
+      // Do not add an artificial delay after the final attempt.
+      if (attempt < this.maxAttempts) {
+        await delay(250 * 2 ** attempt + Math.floor(Math.random() * 200));
+      }
     }
 
     throw lastError instanceof UpstreamError

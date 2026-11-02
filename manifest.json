@@ -11,6 +11,7 @@
       "type": "select",
       "default": "lossless",
       "options": [
+        { "label": "Hi-Res", "value": "hi_res" },
         { "label": "Lossless", "value": "lossless" },
         { "label": "High", "value": "high" },
         { "label": "Low", "value": "low" }

@@ -19,7 +19,8 @@ const app = Fastify({
 app.addHook('onSend', async (_request, reply) => {
   reply.header('Access-Control-Allow-Origin', '*');
   reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Accept, Content-Type');
+  reply.header('Access-Control-Allow-Headers', 'Accept, Content-Type, Range');
+  reply.header('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Length, Content-Range, Content-Disposition, Content-Type');
   reply.header('X-Content-Type-Options', 'nosniff');
 });
 const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config.rateLimitWindowMs, config.rateLimitMaxKeys);
@@ -35,7 +36,8 @@ app.addHook('onRequest', async (request, reply) => {
     return reply.code(403).send({ error: 'BitChord or LastWave User-Agent required' });
   }
   if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/media/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;
-  const result = limiter.check(clientKey(request.ip));
+  const forwardedFor = request.headers['x-forwarded-for'];
+  const result = limiter.check(clientKey(request.ip, typeof forwardedFor === 'string' ? forwardedFor : undefined));
   reply.header('X-RateLimit-Limit', result.limit);
   reply.header('X-RateLimit-Remaining', result.remaining);
   reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
@@ -50,7 +52,7 @@ function isBitChordUserAgent(userAgent: string | undefined): boolean {
 }
 
 function isLastWaveUserAgent(userAgent: string | undefined): boolean {
-  return typeof userAgent === 'string' && /(?:^|\s)LastWave\/[\w.-]+(?:\s|$)/i.test(userAgent.trim());
+  return typeof userAgent === 'string' && /(?:^|\s)LastWave(?:-(?:Player|Downloader))?\/[\w.-]+(?:\s|$)/i.test(userAgent.trim());
 }
 
 function isSupportedNativeUserAgent(userAgent: string | undefined): boolean {

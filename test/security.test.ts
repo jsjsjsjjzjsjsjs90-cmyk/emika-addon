@@ -27,6 +27,11 @@ test('client key prefers the first trusted forwarded address', () => {
   assert.equal(clientKey('10.0.0.1'), '10.0.0.1');
 });
 
+test('client key is bounded and ignores empty forwarded entries', () => {
+  assert.equal(clientKey('10.0.0.1', '   , 10.0.0.1'), '10.0.0.1');
+  assert.equal(clientKey('10.0.0.1', 'x'.repeat(300)).length, 128);
+});
+
 test('cache deduplicates concurrent loaders', async () => {
   const cache = new TtlCache<string>(1000);
   let calls = 0;

@@ -1,16 +1,48 @@
-# Integration audit evidence
+# Integration audit evidence — 2026-11-02
 
-- BitChord source: https://github.com/kushagrasinghx/BitChord
-  - `AddonClient` sends `quality=LOSSLESS|HIGH|LOW` for ordinary tiers, `atmos=auto` when Atmos is wanted, and the lossless resolver explicitly tries `quality=atmos` with `atmos=auto` for Dolby Atmos.
-  - `AddonModels.AddonStream` reads `sampleRate`, `bitDepth`, `audioMode`, `audioModes`, `atmos`, `streamQuality`, `encrypted`, and nested metadata aliases.
-  - The lossless resolver treats `quality=atmos` as the explicit immersive attempt and rejects a spatial stream during stereo tiers.
+## Scope
 
-- LastWave source: https://github.com/Clash-Projects/LastWave-Native
-  - `app/src/main/java/com/lastwave/app/data/addon/AddonClient.kt` sends `quality=atmos&atmos=auto` for its Atmos attempt and `atmos=none` for non-Atmos requests.
-  - `app/src/main/java/com/lastwave/app/data/addon/AddonModels.kt` parses `sampleRate`, `bitDepth`, `audioMode`, `audioModes`, `atmos`, nested metadata, and Hi-Res labels.
-  - `app/src/main/java/com/lastwave/app/data/lossless/LosslessMusicApi.kt` maps Atmos to an explicit `quality=atmos` stream attempt, Hi-Res to `quality=hi_res`, and validates stream metadata before selecting the final tier.
+ตรวจ Emika Addon เทียบกับ BitChord, LastWave Native, hifi-api, Eclipse Music และ Mornye Extension โดยยึดโค้ด client/เอกสารที่เข้าถึงได้เป็นหลัก และทดสอบโค้ด Emika ใน local รวมถึง smoke test production.
 
-- Verified Emika live behavior before this audit:
-  - `https://emika-addon.vercel.app/manifest.json` returned resources `search, stream`.
-  - Search and stream worked with BitChord/v1.9 and `atmos=auto`.
-  - Emika previously rejected `quality=atmos`; this is incompatible with BitChord/LastWave explicit Atmos stream attempts. The fix maps `atmos` and `dolby_atmos` to the LOSSLESS internal tier while preserving the separate Atmos mode parameter.
+## Protocol findings
+
+- BitChord ใช้ `GET /manifest.json`, `GET /search?q=...` และ `GET /stream/{id}`; response เป็น JSON และ track ต้องมี `id` กับ `title` ที่ไม่ว่าง
+- LastWave Native ใช้ endpoint เดียวกัน และรองรับ quality `atmos`, `hi_res`, `lossless`, `high`, `low` พร้อม `atmos=auto|none`
+- LastWave มี native User-Agent หลักคือ `LastWave-Player/1.0` และ `LastWave-Downloader/1.0`; Emika รองรับสองรูปแบบนี้ รวมถึง `LastWave/<version>` และ `BitChord/<version>`
+- BitChord ใช้ `sampleRate` เป็น Hz และ `bitDepth` เป็นจำนวนบิต; Emika ไม่เติมค่าที่ไม่มีหลักฐานและคงค่า 96/192 kHz กับ 24-bit ไว้
+- BitChord/LastWave ไม่มี download endpoint แยก การดาวน์โหลดใช้ stream resolution เดิม โดย `allowDownloads` เป็น policy ใน manifest
+- แหล่งข้อมูลที่ตรวจไม่พบข้อกำหนดบังคับเรื่อง Range/206 สำหรับ addon protocol แต่ Emika media proxy ยังคงรองรับและส่งต่อ `Range`, `Content-Range` และ `Accept-Ranges` สำหรับ browser playback
+- hifi-api และ Mornye มีพฤติกรรมเฉพาะของ Tidal/segmented downloads ไม่ควรถูกนำมาบังคับใช้กับ Qobuz/Instable โดยตรง
+
+## Fixes applied
+
+1. เพิ่ม `LastWave-Player` และ `LastWave-Downloader` ใน User-Agent gate/direct-stream routing
+2. ปรับ rate limiter ให้ใช้ client IP ตัวแรกจาก `x-forwarded-for` ที่ Vercel ส่งผ่าน เพื่อไม่รวมผู้ใช้หลายคนเป็น bucket เดียวกัน
+3. เพิ่ม `Range` ใน CORS allow-list และ expose headers ที่ audio player ใช้ตรวจสอบการตอบกลับ
+4. ลบ delay หลัง retry ครั้งสุดท้ายของ Instable ลดเวลารอเมื่อ retry หมดแล้ว
+5. เพิ่ม regression tests สำหรับ forwarded client key, LastWave aliases และ Config routing
+6. เพิ่ม Hi-Res ใน static `manifest.json` ให้ตรงกับ dynamic manifest
+7. คง media proxy สำหรับ browser/download และ direct upstream URL สำหรับ BitChord/LastWave ตามค่า routing config
+
+## Verification
+
+- Unit tests: 56 ผ่าน, 0 ล้มเหลว
+- TypeScript build: ผ่าน
+- `git diff --check`: ผ่าน
+- Local gate test: `LastWave-Player/1.0`, `LastWave-Downloader/1.0`, `LastWave/1.0` ได้ HTTP 200; UA ทั่วไปได้ HTTP 403 เมื่อเปิด gate
+- Production ก่อน deployment ชุดนี้: search BitChord และ LastWave ได้ HTTP 200; production ยังแสดง `X-RateLimit-Limit: 60` เพราะยังเป็น deployment ก่อนแก้
+
+## Remaining limitations
+
+- Rate limiter ยังเป็น in-memory ต่อ serverless instance จึงไม่ใช้ quota กลางทั้งระบบ หากต้องการ global quota ต้องใช้ external store เช่น Redis/KV
+- Media proxy ส่งผ่านไฟล์ต้นฉบับและไม่ฝังปกอัลบั้มลง FLAC เพราะการ tag ระหว่าง streaming จะทำลาย Range/seek และอาจทำให้ไฟล์เสียหาย การแสดงปกทำผ่าน `artworkURL` ใน metadata/UI
+- อายุ signed upstream URL ยังขึ้นกับ Instable; หากหมดอายุให้เรียก `/stream` ใหม่ ไม่ควร cache URL ต้นทางถาวร
+
+## Sources
+
+- BitChord docs: https://bitchord.kushagrasingh.in/docs
+- BitChord repository: https://github.com/kushagrasinghx/BitChord.git
+- LastWave Native: https://github.com/Clash-Projects/LastWave-Native.git
+- hifi-api: https://github.com/binimum/hifi-api
+- Eclipse Music addon guide: https://eclipsemusic.app/
+- Mornye docs/repository: https://mornye.com/docs and https://github.com/mornyeapp/Mornye-Extension.git
