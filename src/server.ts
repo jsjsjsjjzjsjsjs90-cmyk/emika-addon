@@ -243,7 +243,10 @@ function registerAddon(
 
   app.get(route('/manifest.json'), async (_request, reply) =>
     reply
-      .header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+      .header(
+        'Cache-Control',
+        config.requireBitChordUserAgent ? 'private, no-store' : 'public, max-age=3600, s-maxage=86400',
+      )
       .send({
         ...manifest,
         description: 'Qobuz lossless and Hi-Res music addon',
@@ -292,13 +295,23 @@ function registerAddon(
         }
         while (trackNames.size > 2_000) trackNames.delete(trackNames.keys().next().value as string);
         return reply
-          .header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600')
+          .header(
+            'Cache-Control',
+            config.requireBitChordUserAgent
+              ? 'private, no-store'
+              : 'public, max-age=30, s-maxage=300, stale-while-revalidate=600',
+          )
           .send({ tracks });
       } catch (error) {
         const stale = searchCache.getStale(key);
         if (stale) {
           return reply
-            .header('Cache-Control', 'public, max-age=10, s-maxage=30, stale-while-revalidate=120')
+            .header(
+              'Cache-Control',
+              config.requireBitChordUserAgent
+                ? 'private, no-store'
+                : 'public, max-age=10, s-maxage=30, stale-while-revalidate=120',
+            )
             .send({ tracks: stale, stale: true });
         }
         throw error;
