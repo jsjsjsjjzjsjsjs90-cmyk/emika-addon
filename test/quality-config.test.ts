@@ -101,8 +101,8 @@ test('stream routing defaults to proxy and enables native direct modes independe
     delete process.env.EMIKA_DIRECT_STREAM_LASTWAVE;
     let config = loadConfig();
     assert.equal(config.proxyWebMedia, true);
-    assert.equal(config.directStreamBitChord, false);
-    assert.equal(config.directStreamLastWave, false);
+    assert.equal(config.directStreamBitChord, true);
+    assert.equal(config.directStreamLastWave, true);
 
     process.env.EMIKA_PROXY_WEB_MEDIA = '0';
     process.env.EMIKA_DIRECT_STREAM_BITCHORD = '1';

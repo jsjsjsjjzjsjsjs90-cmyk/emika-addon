@@ -184,8 +184,8 @@ export function loadConfig(): Config {
     uiSessionTtlSeconds: positiveInt('EMIKA_UI_SESSION_TTL_SECONDS', 3600),
     userAgent: process.env.EMIKA_USER_AGENT?.trim() || 'BitChord/v1.9',
     proxyWebMedia: parseZeroOneFlag(process.env.EMIKA_PROXY_WEB_MEDIA, true),
-    directStreamBitChord: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_BITCHORD),
-    directStreamLastWave: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_LASTWAVE),
+    directStreamBitChord: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_BITCHORD, true),
+    directStreamLastWave: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_LASTWAVE, true),
     downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),
     enabledQualityTiers: parseEnabledQualityTiers(process.env.EMIKA_DISABLED_QUALITY_TIERS),
   };
