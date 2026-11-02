@@ -68,3 +68,23 @@ test('User-Agent settings are configurable and safe by default', () => {
     else process.env.EMIKA_USER_AGENT = previousUserAgent;
   }
 });
+
+test('Signed UI Session settings are disabled by default and configurable', () => {
+  const previousEnabled = process.env.EMIKA_ALLOW_SIGNED_UI_SESSION;
+  const previousTtl = process.env.EMIKA_UI_SESSION_TTL_SECONDS;
+  try {
+    delete process.env.EMIKA_ALLOW_SIGNED_UI_SESSION;
+    delete process.env.EMIKA_UI_SESSION_TTL_SECONDS;
+    assert.equal(loadConfig().allowSignedUiSession, false);
+    assert.equal(loadConfig().uiSessionTtlSeconds, 3600);
+    process.env.EMIKA_ALLOW_SIGNED_UI_SESSION = '1';
+    process.env.EMIKA_UI_SESSION_TTL_SECONDS = '900';
+    assert.equal(loadConfig().allowSignedUiSession, true);
+    assert.equal(loadConfig().uiSessionTtlSeconds, 900);
+  } finally {
+    if (previousEnabled === undefined) delete process.env.EMIKA_ALLOW_SIGNED_UI_SESSION;
+    else process.env.EMIKA_ALLOW_SIGNED_UI_SESSION = previousEnabled;
+    if (previousTtl === undefined) delete process.env.EMIKA_UI_SESSION_TTL_SECONDS;
+    else process.env.EMIKA_UI_SESSION_TTL_SECONDS = previousTtl;
+  }
+});

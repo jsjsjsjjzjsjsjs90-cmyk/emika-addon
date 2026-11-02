@@ -44,6 +44,8 @@ export interface Config {
   allowDownloads: boolean;
   checkValidLossless: boolean;
   requireBitChordUserAgent: boolean;
+  allowSignedUiSession: boolean;
+  uiSessionTtlSeconds: number;
   userAgent: string;
   downloadSources: Set<KnownSource>;
   enabledQualityTiers: Set<Quality>;
@@ -175,6 +177,8 @@ export function loadConfig(): Config {
     allowDownloads: (process.env.EMIKA_ALLOW_DOWNLOADS ?? '').trim().toLowerCase() === 'true',
     checkValidLossless: parseZeroOneFlag(process.env.EMIKA_CHECK_VALID_LOSSLESS),
     requireBitChordUserAgent: parseZeroOneFlag(process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT),
+    allowSignedUiSession: parseZeroOneFlag(process.env.EMIKA_ALLOW_SIGNED_UI_SESSION),
+    uiSessionTtlSeconds: positiveInt('EMIKA_UI_SESSION_TTL_SECONDS', 3600),
     userAgent: process.env.EMIKA_USER_AGENT?.trim() || 'BitChord/v1.9',
     downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),
     enabledQualityTiers: parseEnabledQualityTiers(process.env.EMIKA_DISABLED_QUALITY_TIERS),

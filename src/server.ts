@@ -7,6 +7,7 @@ import { normalizeTrack, streamResponse, upstreamIdFromPublicId } from './normal
 import { createProvider, createSourceProvider, type IsolatedSource } from './providers/index.js';
 import { SlidingWindowRateLimiter, clientKey } from './rate-limit.js';
 import { normalizeHealthQuery } from './query.js';
+import { createUiSession, readCookie, UI_SESSION_COOKIE, verifyUiSession } from './ui-session.js';
 import type { QobuzProvider, Quality, PublicTrack } from './types.js';
 
 const config = loadConfig();
@@ -24,7 +25,12 @@ const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
   const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/');
-  if (config.requireBitChordUserAgent && isAddonResource && !isBitChordUserAgent(request.headers['user-agent'])) {
+  const hasBitChordIdentity = isBitChordUserAgent(request.headers['user-agent']);
+  const hasUiSession = config.allowSignedUiSession && verifyUiSession(
+    readCookie(request.headers.cookie, UI_SESSION_COOKIE),
+    config.idSecret,
+  );
+  if (config.requireBitChordUserAgent && isAddonResource && !hasBitChordIdentity && !hasUiSession) {
     return reply.code(403).send({ error: 'BitChord User-Agent required' });
   }
   if (!pathname.includes('/search') && !pathname.includes('/stream/') && pathname !== '/health/sources') return;
@@ -52,7 +58,19 @@ const manifests = {
   instable:   { id: 'com.bitchord.qobuz.instable',   name: 'Instable Lossless',        version: '1.0.0' },
 } as const;
 
-app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
+app.get('/', async (_request, reply) => {
+  if (config.allowSignedUiSession) {
+    const token = createUiSession(config.idSecret, config.uiSessionTtlSeconds);
+    reply.header(
+      'Set-Cookie',
+      `${UI_SESSION_COOKIE}=${token}; Path=/; Max-Age=${config.uiSessionTtlSeconds}; HttpOnly; Secure; SameSite=Lax`,
+    );
+  }
+  return reply
+    .header('Cache-Control', 'private, no-store')
+    .type('text/html; charset=utf-8')
+    .send(homePage);
+});
 app.get('/health', async () => ({
   ok: true,
   provider: config.provider,

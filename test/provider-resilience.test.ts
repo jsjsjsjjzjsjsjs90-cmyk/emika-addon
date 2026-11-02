@@ -28,6 +28,8 @@ function config(overrides: Partial<Config> = {}): Config {
     allowDownloads: false,
     checkValidLossless: false,
     requireBitChordUserAgent: false,
+    allowSignedUiSession: false,
+    uiSessionTtlSeconds: 3600,
     userAgent: 'BitChord/v1.9',
     downloadSources: new Set(),
     enabledQualityTiers: new Set<Quality>(['HI_RES', 'LOSSLESS', 'HIGH', 'LOW']),
