@@ -301,6 +301,19 @@ function registerAddon(
           trackNames.set(track.id, downloadFilename(baseName, track.format));
         }
         while (trackNames.size > 2_000) trackNames.delete(trackNames.keys().next().value as string);
+        const responseTracks = isLastWaveUserAgent(request.headers['user-agent'])
+          ? tracks.map((track) => {
+              if (track.streamURL) return track;
+              const forwardedProtocol = request.headers['x-forwarded-proto'];
+              const protocol = forwardedProtocol === 'http' ? 'http' : 'https';
+              const origin = `${protocol}://${request.headers.host ?? 'localhost'}`;
+              const mediaURL = new URL(route(`/media/${encodeURIComponent(track.id)}`), origin);
+              mediaURL.searchParams.set('quality', quality.toLowerCase());
+              mediaURL.searchParams.set('atmos', atmos);
+              mediaURL.searchParams.set('filename', trackNames.get(track.id) ?? 'download.flac');
+              return { ...track, streamURL: mediaURL.toString() };
+            })
+          : tracks;
         return reply
           .header(
             'Cache-Control',
@@ -308,7 +321,7 @@ function registerAddon(
               ? 'private, no-store'
               : 'public, max-age=30, s-maxage=300, stale-while-revalidate=600',
           )
-          .send({ tracks });
+          .send({ tracks: responseTracks });
       } catch (error) {
         const stale = searchCache.getStale(key);
         if (stale !== undefined) {
