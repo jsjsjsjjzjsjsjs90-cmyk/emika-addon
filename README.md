@@ -1,4 +1,3 @@
-![Emika Mascot](assets/emika-mascot.jpg)
 # Emika Addon
 
 A [BitChord](https://bitcord.app) addon. Exposes a `manifest.json`, a `/search` endpoint, and a `/stream/:id` endpoint that returns a directly playable HTTPS rendition. Downloads are disabled by default and can be enabled only for sources the operator is authorized to save.
