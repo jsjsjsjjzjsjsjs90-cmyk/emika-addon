@@ -20,6 +20,7 @@ function config(overrides: Partial<Config> = {}): Config {
     provider: 'multi',
     enabledSources: new Set(),
     sourceSearchTimeoutMs: 100,
+    qobuzdlPlanLimitCooldownMs: 1000,
     sourceHealthTimeoutMs: 200,
     rateLimitWindowMs: 1000,
     rateLimitMaxRequests: 10,
@@ -524,6 +525,27 @@ test('racing provider ignores unusable tracks and falls back to another source',
   assert.deepEqual(await provider.search('x', 'LOSSLESS', 'auto'), [
     { upstreamId: 'good:ok', title: 'Usable' },
   ]);
+});
+
+test('racing provider cools down Qobuz-DL after a plan-limit error', async () => {
+  let qobuzCalls = 0;
+  const provider = new RacingProvider([
+    { name: 'qobuzdl', provider: {
+      async search() { qobuzCalls += 1; throw new Error('Qobuz-DL plan limit reached; source temporarily unavailable'); },
+      async getStream() { return null; },
+    } },
+    { name: 'instable', provider: {
+      async search() { return [{ upstreamId: 'fallback', title: 'Fallback' }]; },
+      async getStream() { return null; },
+    } },
+  ], 100, 10_000);
+  assert.deepEqual(await provider.search('x', 'LOSSLESS', 'auto'), [
+    { upstreamId: 'instable:fallback', title: 'Fallback' },
+  ]);
+  assert.deepEqual(await provider.search('x', 'LOSSLESS', 'auto'), [
+    { upstreamId: 'instable:fallback', title: 'Fallback' },
+  ]);
+  assert.equal(qobuzCalls, 1);
 });
 
 test('health query is bounded before fan-out to upstream sources', () => {

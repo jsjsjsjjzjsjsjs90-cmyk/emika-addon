@@ -1,4 +1,5 @@
 import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.js';
+import { isQobuzDlPlanLimitError } from './qobuzdl.js';
 
 export interface RacingSource { name: string; provider: QobuzProvider }
 
@@ -6,10 +7,16 @@ export class RacingProvider implements QobuzProvider {
   constructor(
     private readonly sources: RacingSource[],
     private readonly perSourceTimeoutMs: number,
-  ) {}
+    private readonly qobuzdlPlanLimitCooldownMs = 60_000,
+  ) {
+    this.qobuzdlUnavailableUntil = 0;
+  }
+
+  private qobuzdlUnavailableUntil: number;
 
   async search(query: string, quality: Quality, atmos: string): Promise<QobuzTrack[]> {
-    const active = this.sources.filter((s) => s.provider);
+    const now = Date.now();
+    const active = this.sources.filter((s) => s.provider && (s.name !== 'qobuzdl' || now >= this.qobuzdlUnavailableUntil));
     if (active.length === 0) return [];
 
     return new Promise<QobuzTrack[]>((resolve, reject) => {
@@ -46,6 +53,9 @@ export class RacingProvider implements QobuzProvider {
             }
           })
           .catch((err) => {
+            if (source.name === 'qobuzdl' && isQobuzDlPlanLimitError(err)) {
+              this.qobuzdlUnavailableUntil = Date.now() + this.qobuzdlPlanLimitCooldownMs;
+            }
             rejected += 1;
             lastError = err;
           })
@@ -66,6 +76,7 @@ export class RacingProvider implements QobuzProvider {
     if (sep <= 0) return null;
     const sourceName = trackId.slice(0, sep);
     const upstreamId = trackId.slice(sep + 1);
+    if (sourceName === 'qobuzdl' && Date.now() < this.qobuzdlUnavailableUntil) return null;
     const source = this.sources.find((c) => c.name === sourceName);
     return source ? source.provider.getStream(upstreamId, quality, atmos) : null;
   }
@@ -80,6 +91,7 @@ export function createRacingProvider(
   bitchordhires?: QobuzProvider,
   instable?: QobuzProvider,
   perSourceTimeoutMs = 3000,
+  qobuzdlPlanLimitCooldownMs = 60_000,
 ): QobuzProvider {
   const sources: RacingSource[] = [];
   if (qobuzdl)    sources.push({ name: 'qobuzdl',    provider: qobuzdl });
@@ -89,5 +101,5 @@ export function createRacingProvider(
   if (eljohnzc)   sources.push({ name: 'eljohnzc',   provider: eljohnzc });
   if (bitchordhires) sources.push({ name: 'bitchordhires', provider: bitchordhires });
   if (instable)   sources.push({ name: 'instable',   provider: instable });
-  return new RacingProvider(sources, perSourceTimeoutMs);
+  return new RacingProvider(sources, perSourceTimeoutMs, qobuzdlPlanLimitCooldownMs);
 }

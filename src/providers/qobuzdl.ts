@@ -60,14 +60,22 @@ export class QobuzDlProvider implements QobuzProvider {
       const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
       try {
         const response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': this.config.userAgent }, signal: controller.signal });
+        const rawBody = await response.text();
         let body: unknown;
-        try { body = await response.json(); } catch { throw new UpstreamError(502, 'Qobuz-DL provider returned invalid JSON'); }
+        try { body = JSON.parse(rawBody); } catch {
+          if (isPlanLimitText(rawBody)) throw new UpstreamError(503, planLimitMessage());
+          throw new UpstreamError(502, 'Qobuz-DL provider returned invalid JSON');
+        }
         if (!response.ok) {
-          const error = new UpstreamError(retryableStatus(response.status) ? 502 : response.status === 404 ? 404 : 400, upstreamMessage(body));
+          const error = isPlanLimitBody(body)
+            ? new UpstreamError(503, planLimitMessage())
+            : new UpstreamError(retryableStatus(response.status) ? 502 : response.status === 404 ? 404 : 400, upstreamMessage(body));
           if (!retryableStatus(response.status) || attempt >= this.config.upstreamRetries) throw error;
           lastError = error;
         } else if (isRecord(body) && body.success === false) {
-          const error = new UpstreamError(502, upstreamMessage(body));
+          const error = isPlanLimitBody(body)
+            ? new UpstreamError(503, planLimitMessage())
+            : new UpstreamError(502, upstreamMessage(body));
           if (attempt >= this.config.upstreamRetries) throw error;
           lastError = error;
         } else return body;
@@ -127,4 +135,22 @@ function isRecord(value: unknown): value is JsonRecord { return typeof value ===
 function upstreamMessage(body: unknown): string {
   if (isRecord(body) && typeof body.error === 'string') return `Qobuz-DL upstream error: ${body.error}`;
   return 'Qobuz-DL upstream request failed';
+}
+
+export function isQobuzDlPlanLimitError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /qobuz-dl plan limit|owner has reached their plan limits|plan limits|quota exceeded/i.test(error.message);
+}
+
+function isPlanLimitText(text: string): boolean {
+  return /owner has reached their plan limits|plan limits|quota exceeded/i.test(text);
+}
+
+function isPlanLimitBody(body: unknown): boolean {
+  if (!isRecord(body)) return false;
+  return isPlanLimitText(Object.values(body).filter((value) => typeof value === 'string').join(' '));
+}
+
+function planLimitMessage(): string {
+  return 'Qobuz-DL plan limit reached; source temporarily unavailable';
 }

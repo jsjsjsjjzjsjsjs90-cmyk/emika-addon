@@ -38,6 +38,7 @@ export interface Config {
   enabledSources: Set<KnownSource>;
   rootEnabledSources?: Set<KnownSource>;
   sourceSearchTimeoutMs: number;
+  qobuzdlPlanLimitCooldownMs: number;
   remoteAddonTimeoutMs?: number;
   sourceHealthTimeoutMs: number;
   rateLimitWindowMs: number;
@@ -176,6 +177,7 @@ export function loadConfig(): Config {
     enabledSources: parseEnabledSources(process.env.QOBUZ_ENABLED_SOURCES),
     rootEnabledSources: parseEnabledSources(process.env.EMIKA_ROOT_SOURCES ?? process.env.QOBUZ_ENABLED_SOURCES),
     sourceSearchTimeoutMs,
+    qobuzdlPlanLimitCooldownMs: positiveInt('QOBUZDL_PLAN_LIMIT_COOLDOWN_SECONDS', 60) * 1000,
     remoteAddonTimeoutMs: positiveInt('REMOTE_ADDON_TIMEOUT_MS', 8000),
     sourceHealthTimeoutMs: positiveInt(
       'SOURCE_HEALTH_TIMEOUT_MS',

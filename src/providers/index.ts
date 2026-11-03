@@ -43,6 +43,7 @@ export function createProvider(config: Config): QobuzProvider {
       buildFor(rootConfig, 'bitchordhires'),
       buildFor(rootConfig, 'instable'),
       rootConfig.sourceSearchTimeoutMs,
+      rootConfig.qobuzdlPlanLimitCooldownMs,
     );
   }
   return new StubQobuzProvider();
