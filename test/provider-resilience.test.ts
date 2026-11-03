@@ -487,7 +487,7 @@ test('racing provider ignores unusable tracks and falls back to another source',
 });
 
 test('health query is bounded before fan-out to upstream sources', () => {
-  assert.equal(normalizeHealthQuery(undefined, 10), 'love');
+  assert.equal(normalizeHealthQuery(undefined, 20), 'vegas doja cat');
   assert.equal(normalizeHealthQuery('  jazz  ', 10), 'jazz');
   assert.throws(() => normalizeHealthQuery('12345678901', 10), /at most 10/);
 });
