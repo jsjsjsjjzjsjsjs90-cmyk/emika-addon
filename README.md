@@ -1,6 +1,6 @@
 # Emika Addon
 
-A [BitChord](https://bitcord.app) addon. Exposes a `manifest.json`, a `/search` endpoint, and a `/stream/:id` endpoint that returns a directly playable HTTPS rendition. Downloads are disabled by default and can be enabled only for sources the operator is authorized to save.
+A [BitChord](https://bitchord.kushagrasingh.in/) addon. Exposes a `manifest.json`, a `/search` endpoint, and a `/stream/:id` endpoint that returns a directly playable HTTPS rendition. Downloads are disabled by default and can be enabled only for sources the operator is authorized to save.
 
 TypeScript · Node 22–26 · Vercel Serverless or any Node host.
 
