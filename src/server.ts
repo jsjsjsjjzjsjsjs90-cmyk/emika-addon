@@ -314,10 +314,11 @@ function registerAddon(
               return { ...track, streamURL: mediaURL.toString() };
             })
           : tracks;
+        const privateSearchResponse = config.requireBitChordUserAgent || isLastWaveUserAgent(request.headers['user-agent']);
         return reply
           .header(
             'Cache-Control',
-            config.requireBitChordUserAgent
+            privateSearchResponse
               ? 'private, no-store'
               : 'public, max-age=30, s-maxage=300, stale-while-revalidate=600',
           )
@@ -325,10 +326,11 @@ function registerAddon(
       } catch (error) {
         const stale = searchCache.getStale(key);
         if (stale !== undefined) {
+          const privateSearchResponse = config.requireBitChordUserAgent || isLastWaveUserAgent(request.headers['user-agent']);
           return reply
             .header(
               'Cache-Control',
-              config.requireBitChordUserAgent
+              privateSearchResponse
                 ? 'private, no-store'
                 : 'public, max-age=10, s-maxage=30, stale-while-revalidate=120',
             )
