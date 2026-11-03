@@ -6,13 +6,29 @@ type JsonRecord = Record<string, unknown>;
 
 /** Adapter for the public Qobuz-DL-compatible JSON API. */
 export class QobuzDlProvider implements QobuzProvider {
+  private readonly trackMetadata = new Map<string, Pick<QobuzTrack, 'sampleRate' | 'bitDepth' | 'audioQuality' | 'format'>>();
+
   constructor(private readonly config: Config) {}
 
   async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
     const body = await this.request('/api/get-music', { q: query, offset: '0' });
     const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
     const tracks = data && isRecord(data.tracks) && Array.isArray(data.tracks.items) ? data.tracks.items : [];
-    return tracks.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
+    const normalized = tracks.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
+    for (const track of normalized) {
+      this.trackMetadata.set(track.upstreamId, {
+        sampleRate: track.sampleRate,
+        bitDepth: track.bitDepth,
+        audioQuality: track.audioQuality,
+        format: track.format,
+      });
+    }
+    while (this.trackMetadata.size > 2_000) {
+      const oldest = this.trackMetadata.keys().next().value;
+      if (typeof oldest !== 'string') break;
+      this.trackMetadata.delete(oldest);
+    }
+    return normalized;
   }
 
   async getStream(trackId: string, quality: Quality, _atmos: string): Promise<QobuzStream | null> {
@@ -20,9 +36,19 @@ export class QobuzDlProvider implements QobuzProvider {
     const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
     const url = data && typeof data.url === 'string' ? data.url : undefined;
     if (!url || !/^https:\/\//i.test(url)) return null;
-    // The upstream endpoint returns only a URL. Do not infer codec, bitrate,
-    // bit depth, Dolby, or encryption metadata that it did not provide.
-    return { url, manifest: 'none', encrypted: false };
+    // The upstream endpoint returns only a URL. Reuse only metadata captured
+    // from the preceding search response; never guess from the requested tier.
+    const metadata = this.trackMetadata.get(trackId);
+    return {
+      url,
+      format: metadata?.format,
+      quality,
+      manifest: 'none',
+      encrypted: false,
+      sampleRate: metadata?.sampleRate,
+      bitDepth: metadata?.bitDepth,
+      audioQuality: metadata?.audioQuality,
+    };
   }
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
@@ -77,14 +103,24 @@ function toTrack(raw: JsonRecord): QobuzTrack | null {
   const image = album && isRecord(album.image) ? album.image : undefined;
   const artworkURL = image && typeof image.large === 'string' ? image.large : undefined;
   const maxBitDepth = typeof raw.maximum_bit_depth === 'number' ? raw.maximum_bit_depth : undefined;
+  const sampleRate = normalizeSampleRate(raw.maximum_sampling_rate);
+  const isHiRes = (sampleRate ?? 0) > 48_000 || (maxBitDepth ?? 0) > 16;
   return {
     upstreamId: String(id), title: title.trim(),
     artist: performer && typeof performer.name === 'string' ? performer.name : undefined,
     album: album && typeof album.title === 'string' ? album.title : undefined,
     duration: typeof raw.duration === 'number' ? raw.duration : undefined,
     artworkURL, format: maxBitDepth ? 'flac' : undefined,
-    audioQuality: maxBitDepth ? 'LOSSLESS' : undefined,
+    audioQuality: maxBitDepth ? (isHiRes ? 'HI_RES_LOSSLESS' : 'LOSSLESS') : undefined,
+    sampleRate,
+    bitDepth: maxBitDepth,
   };
+}
+
+function normalizeSampleRate(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
+  const hz = value < 1_000 ? value * 1_000 : value;
+  return Math.round(hz);
 }
 
 function isRecord(value: unknown): value is JsonRecord { return typeof value === 'object' && value !== null; }
