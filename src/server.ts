@@ -364,9 +364,17 @@ function registerAddon(
       try {
         const normalized = streamResponse(stream, quality);
         const filename = downloadFilename(request.query.filename || trackNames.get(id), normalized.format);
-        const forwardedProtocol = request.headers['x-forwarded-proto'];
+        // Velixir (and other reverse proxies) may expose an internal Host to
+        // the app while the browser must receive the public forwarded host.
+        // Building the proxy URL from Host alone can point playback at a
+        // platform placeholder instead of this deployment.
+        const forwardedProtocol = firstForwardedValue(request.headers['x-forwarded-proto']);
         const protocol = forwardedProtocol === 'http' ? 'http' : 'https';
-        const origin = `${protocol}://${request.headers.host ?? 'localhost'}`;
+        const forwardedHost = firstForwardedValue(
+          request.headers['x-forwarded-host'] ?? request.headers['x-original-host'],
+        );
+        const publicHost = forwardedHost || request.headers.host || 'localhost';
+        const origin = `${protocol}://${publicHost}`;
         const userAgent = request.headers['user-agent'];
         const directForNativeClient =
           (config.directStreamBitChord && isBitChordUserAgent(userAgent)) ||
@@ -454,6 +462,12 @@ function registerAddon(
       return reply.send(Readable.fromWeb(response.body as any));
     },
   );
+}
+
+function firstForwardedValue(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const first = raw?.split(',')[0]?.trim();
+  return first || undefined;
 }
 
 function manifestAllowsDownloads(namespace?: string): boolean {
