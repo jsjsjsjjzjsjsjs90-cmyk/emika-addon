@@ -88,15 +88,22 @@ export class RemoteAddonProvider implements QobuzProvider {
         atmos,
       });
       if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
+      const mimeType = typeof body.mimeType === 'string' ? body.mimeType : undefined;
+      const rawContainer = typeof body.container === 'string' ? body.container : undefined;
+      const container = rawContainer?.trim().toLowerCase() === 'dash' && mimeType === 'application/dash+xml'
+        ? 'mp4'
+        : rawContainer;
       return {
         url: body.url, format: typeof body.format === 'string' ? body.format : undefined,
         codec: typeof body.codec === 'string' ? body.codec : undefined,
-        container: typeof body.container === 'string' ? body.container : undefined,
+        container,
+        mimeType,
         quality: typeof body.quality === 'string' ? body.quality : quality,
         streamQuality: typeof body.streamQuality === 'string' ? body.streamQuality : undefined,
         audioQuality: typeof body.audioQuality === 'string' ? body.audioQuality : undefined,
         manifest: body.manifest === 'hls' || body.manifest === 'dash' ? body.manifest : 'none',
         encrypted: body.encrypted === true,
+        expiresAt: numberValue(body.expiresAt),
         sampleRate: numberValue(body.sampleRate),
         bitDepth: numberValue(body.bitDepth),
         bitrate: numberValue(body.bitrate),

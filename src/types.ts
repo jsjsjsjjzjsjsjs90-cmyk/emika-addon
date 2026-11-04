@@ -26,6 +26,7 @@ export interface QobuzStream {
   quality?: string;
   codec?: string;
   container?: string;
+  mimeType?: string;
   manifest?: 'none' | 'hls' | 'dash';
   encrypted?: boolean;
   expiresAt?: number;

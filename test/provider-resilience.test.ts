@@ -102,6 +102,13 @@ test('remote addon can send lowercase quality values for Aurix-compatible addons
   const requests: string[] = [];
   globalThis.fetch = (async (input) => {
     requests.push(String(input));
+    if (requests.length === 2) {
+      return new Response(JSON.stringify({
+        url: 'https://aurix.example.test/internal/manifest.mpd', format: 'dash', manifest: 'dash',
+        codec: 'flac', container: 'dash', mimeType: 'application/dash+xml',
+        sampleRate: 44100, bitDepth: 16, encrypted: false,
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     return new Response(JSON.stringify({ tracks: [{ id: 'aurix-42', title: 'Track', artist: 'Artist' }] }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -114,9 +121,11 @@ test('remote addon can send lowercase quality values for Aurix-compatible addons
       'https://aurix.example.test/base',
     );
     await provider.search('track', 'LOSSLESS', 'auto');
-    await provider.getStream('aurix-42', 'HI_RES', 'off');
+    const stream = await provider.getStream('aurix-42', 'HI_RES', 'off');
     assert.equal(requests[0], 'https://aurix.example.test/base/search?q=track&quality=lossless&atmos=auto');
     assert.equal(requests[1], 'https://aurix.example.test/base/stream/aurix-42?quality=hi_res&atmos=off');
+    assert.equal(stream?.container, 'mp4');
+    assert.equal(stream?.mimeType, 'application/dash+xml');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -171,7 +180,10 @@ test('remote addon preserves the distinct HI_RES quality tier', async () => {
   const requests: string[] = [];
   globalThis.fetch = (async (input) => {
     requests.push(String(input));
-    return new Response(JSON.stringify({ url: 'https://media.example.test/hi-res.flac', format: 'flac', quality: 'HI_RES' }), {
+    return new Response(JSON.stringify({
+      url: 'https://media.example.test/hi-res.flac', format: 'flac', quality: 'HI_RES',
+      mimeType: 'audio/flac', expiresAt: 1_900_000_000,
+    }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
@@ -182,6 +194,8 @@ test('remote addon preserves the distinct HI_RES quality tier', async () => {
     const stream = await provider.getStream('42', 'HI_RES', 'off');
     assert.equal(requests[0], 'https://remote.example.test/stream/42?quality=HI_RES&atmos=off');
     assert.equal(stream?.quality, 'HI_RES');
+    assert.equal(stream?.mimeType, 'audio/flac');
+    assert.equal(stream?.expiresAt, 1_900_000_000);
   } finally {
     globalThis.fetch = originalFetch;
   }
