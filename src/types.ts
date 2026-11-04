@@ -11,6 +11,7 @@ export interface QobuzTrack {
   streamURL?: string;
   format?: string;
   audioQuality?: string;
+  availableQualities?: string[];
   audioMode?: string;
   audioModes?: string[];
   atmos?: boolean;

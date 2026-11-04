@@ -36,10 +36,21 @@ export function normalizeTrack(track: QobuzTrack, secret?: string, namespace?: s
     duration: Number.isFinite(track.duration) && (track.duration as number) >= 0 ? track.duration : undefined,
     ...(normalizeIsrc(track.isrc) ? { isrc: normalizeIsrc(track.isrc) } : {}),
     artworkURL: absoluteUrl(track.artworkURL), streamURL: absoluteUrl(track.streamURL), format: track.format?.toLowerCase(),
-    audioQuality: track.audioQuality?.trim(), audioMode: track.audioMode?.trim(),
+    audioQuality: track.audioQuality?.trim(), availableQualities: availableQualities(track), audioMode: track.audioMode?.trim(),
     audioModes: track.audioModes, atmos: track.atmos,
     sampleRate: normalizeSampleRate(track.sampleRate), bitDepth: positiveInteger(track.bitDepth), bitrate: normalizeBitrate(track.bitrate),
   };
+}
+
+function availableQualities(track: QobuzTrack): string[] {
+  const explicit = Array.isArray(track.availableQualities)
+    ? track.availableQualities.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    : [];
+  if (explicit.length > 0) return [...new Set(explicit.map((value) => value.trim().toUpperCase()))];
+  const qualities = ['LOSSLESS', 'HIGH'];
+  const hiRes = (track.bitDepth ?? 0) > 16 || (track.sampleRate ?? 0) > 48_000 || /HI_RES|HI-RES|24.?BIT/i.test(track.audioQuality ?? '');
+  if (hiRes) qualities.unshift('HI_RES');
+  return qualities;
 }
 
 export function streamResponse(stream: QobuzStream, requested: Quality): QobuzStream {

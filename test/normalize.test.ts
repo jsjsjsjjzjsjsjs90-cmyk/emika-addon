@@ -10,6 +10,14 @@ test('normalizes a track to an opaque stable id', () => {
   assert.equal(upstreamIdFromPublicId(track.id), '123');
 });
 
+test('exposes all quality tiers discovered from Hi-Res metadata', () => {
+  const track = normalizeTrack({
+    upstreamId: 'hires-123', title: 'Hi-Res Song', format: 'flac',
+    audioQuality: 'HI_RES_LOSSLESS', sampleRate: 96_000, bitDepth: 24,
+  });
+  assert.deepEqual(track.availableQualities, ['HI_RES', 'LOSSLESS', 'HIGH']);
+});
+
 test('signed IDs reject tampering', () => {
   const id = normalizeTrack({ upstreamId: '123', title: 'Song' }).id;
   assert.equal(upstreamIdFromPublicId(`${id.slice(0, -1)}x`), undefined);

@@ -341,6 +341,7 @@ test('Qobuz-DL preserves Hi-Res metadata from search through stream resolution',
     assert.equal(tracks[0]?.sampleRate, 96_000);
     assert.equal(tracks[0]?.bitDepth, 24);
     assert.equal(tracks[0]?.audioQuality, 'HI_RES_LOSSLESS');
+    assert.deepEqual(tracks[0]?.availableQualities, ['HI_RES', 'LOSSLESS', 'HIGH']);
     const stream = await provider.getStream('156469673', 'HI_RES', 'auto');
     assert.equal(stream?.format, 'flac');
     assert.equal(stream?.sampleRate, 96_000);

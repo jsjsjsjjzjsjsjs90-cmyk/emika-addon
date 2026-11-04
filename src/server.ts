@@ -281,16 +281,24 @@ function registerAddon(
       const query = request.query.q?.trim();
       if (!query) throw badRequest('q is required');
       if (query.length > config.maxQueryLength) throw badRequest(`q must be at most ${config.maxQueryLength} characters`);
-      const quality = parseQuality(request.query.quality);
+      const catalogMode = !request.query.quality?.trim();
+      const quality = catalogMode
+        ? (config.enabledQualityTiers.has('HI_RES') ? 'HI_RES' : config.enabledQualityTiers.has('LOSSLESS') ? 'LOSSLESS' : 'HIGH')
+        : parseQuality(request.query.quality);
       assertQualityEnabled(quality);
       const atmos = parseAtmos(request.query.atmos);
-      const key = `${query}\u0000${quality}\u0000${atmos}`;
+      const key = `${query}\u0000${quality}\u0000${atmos}\u0000${catalogMode ? 'catalog' : 'requested'}`;
 
       try {
         const tracks = await searchCache.getOrLoad(key, async () =>
           (await withTimeout(provider.search(query, quality, atmos), searchTimeoutFor(namespace))).flatMap((track) => {
             try {
-              return [normalizeTrack(track, config.idSecret, namespace)];
+              const normalized = normalizeTrack(track, config.idSecret, namespace);
+              if (!catalogMode || !normalized.availableQualities) return [normalized];
+              return [{
+                ...normalized,
+                availableQualities: normalized.availableQualities.filter((tier) => config.enabledQualityTiers.has(tier as Quality)),
+              }];
             } catch {
               return [];
             }
@@ -322,7 +330,7 @@ function registerAddon(
               ? 'private, no-store'
               : 'public, max-age=30, s-maxage=300, stale-while-revalidate=600',
           )
-          .send({ tracks: responseTracks });
+          .send({ tracks: responseTracks, ...(catalogMode ? { catalogMode: true } : {}) });
       } catch (error) {
         const stale = searchCache.getStale(key);
         if (stale !== undefined) {

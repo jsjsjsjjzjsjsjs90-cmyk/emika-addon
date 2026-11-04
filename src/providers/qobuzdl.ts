@@ -117,6 +117,8 @@ function toTrack(raw: JsonRecord): QobuzTrack | null {
   const maxBitDepth = typeof raw.maximum_bit_depth === 'number' ? raw.maximum_bit_depth : undefined;
   const sampleRate = normalizeSampleRate(raw.maximum_sampling_rate);
   const isHiRes = (sampleRate ?? 0) > 48_000 || (maxBitDepth ?? 0) > 16;
+  const availableQualities = ['LOSSLESS', 'HIGH'];
+  if (isHiRes) availableQualities.unshift('HI_RES');
   return {
     upstreamId: String(id), title: title.trim(),
     artist: performer && typeof performer.name === 'string' ? performer.name : undefined,
@@ -124,6 +126,7 @@ function toTrack(raw: JsonRecord): QobuzTrack | null {
     duration: typeof raw.duration === 'number' ? raw.duration : undefined,
     artworkURL, format: maxBitDepth ? 'flac' : undefined,
     audioQuality: maxBitDepth ? (isHiRes ? 'HI_RES_LOSSLESS' : 'LOSSLESS') : undefined,
+    availableQualities,
     sampleRate,
     bitDepth: maxBitDepth,
   };
