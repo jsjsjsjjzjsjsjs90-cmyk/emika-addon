@@ -10,11 +10,15 @@ export class QobuzDlProvider implements QobuzProvider {
 
   constructor(private readonly config: Config) {}
 
-  async search(query: string, _quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
+  async search(query: string, quality: Quality, _atmos: string): Promise<QobuzTrack[]> {
     const body = await this.request('/api/get-music', { q: query, offset: '0' });
     const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
     const tracks = data && isRecord(data.tracks) && Array.isArray(data.tracks.items) ? data.tracks.items : [];
-    const normalized = tracks.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
+    const normalized = tracks
+      .filter(isRecord)
+      .map(toTrack)
+      .filter((track): track is QobuzTrack => track !== null)
+      .map((track) => projectQuality(track, quality));
     for (const track of normalized) {
       this.trackMetadata.set(track.upstreamId, {
         sampleRate: track.sampleRate,
@@ -38,7 +42,7 @@ export class QobuzDlProvider implements QobuzProvider {
     if (!url || !/^https:\/\//i.test(url)) return null;
     // The upstream endpoint returns only a URL. Reuse only metadata captured
     // from the preceding search response; never guess from the requested tier.
-    const metadata = this.trackMetadata.get(trackId);
+    const metadata = projectStreamMetadata(this.trackMetadata.get(trackId), quality);
     return {
       url,
       format: metadata?.format,
@@ -129,6 +133,25 @@ function normalizeSampleRate(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
   const hz = value < 1_000 ? value * 1_000 : value;
   return Math.round(hz);
+}
+
+function projectQuality(track: QobuzTrack, quality: Quality): QobuzTrack {
+  if (quality === 'LOSSLESS') {
+    return { ...track, format: 'flac', audioQuality: 'LOSSLESS', sampleRate: 44_100, bitDepth: 16 };
+  }
+  if (quality === 'HIGH' || quality === 'LOW') {
+    return { ...track, format: 'mp3', audioQuality: quality, sampleRate: undefined, bitDepth: undefined, bitrate: 320_000 };
+  }
+  return track;
+}
+
+function projectStreamMetadata(
+  metadata: Pick<QobuzTrack, 'sampleRate' | 'bitDepth' | 'audioQuality' | 'format'> | undefined,
+  quality: Quality,
+): Pick<QobuzTrack, 'sampleRate' | 'bitDepth' | 'audioQuality' | 'format' | 'bitrate'> {
+  if (quality === 'LOSSLESS') return { format: 'flac', audioQuality: 'LOSSLESS', sampleRate: 44_100, bitDepth: 16 };
+  if (quality === 'HIGH' || quality === 'LOW') return { format: 'mp3', audioQuality: quality, bitrate: 320_000 };
+  return metadata ?? {};
 }
 
 function isRecord(value: unknown): value is JsonRecord { return typeof value === 'object' && value !== null; }

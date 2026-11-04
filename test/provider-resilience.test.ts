@@ -352,6 +352,33 @@ test('Qobuz-DL preserves Hi-Res metadata from search through stream resolution',
   }
 });
 
+test('Qobuz-DL projects Lossless metadata to the actual CD rendition', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url.includes('/api/get-music')) {
+      return new Response(JSON.stringify({ data: { tracks: { items: [{
+        id: 160900560, title: 'Vegas', performer: { name: 'Doja Cat' },
+        maximum_sampling_rate: 96, maximum_bit_depth: 24, hires: true,
+      }] } } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ data: { url: 'https://media.example.test/vegas-cd.flac' } }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const provider = new QobuzDlProvider(config({ apiBaseUrl: 'https://qobuz.example.test' }));
+    const tracks = await provider.search('vegas', 'LOSSLESS', 'auto');
+    assert.equal(tracks[0]?.sampleRate, 44_100);
+    assert.equal(tracks[0]?.bitDepth, 16);
+    assert.equal(tracks[0]?.audioQuality, 'LOSSLESS');
+    const stream = await provider.getStream('160900560', 'LOSSLESS', 'auto');
+    assert.equal(stream?.sampleRate, 44_100);
+    assert.equal(stream?.bitDepth, 16);
+    assert.equal(stream?.audioQuality, 'LOSSLESS');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Instable upgrades BitChord LOSSLESS to quality id 27 for a searched Hi-Res track', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];
