@@ -145,6 +145,7 @@ Name Default Purpose
 REQUEST_TIMEOUT_MS 6000 Upstream request timeout
 UPSTREAM_RETRIES 1 Retries on retryable upstream 5xx
 CACHE_TTL_SECONDS 300 Search cache TTL
+REMOTE_ADDON_QUALITY_CASE upper Quality enum casing sent to remote addons; use `lower` for Aurix (`lossless`, `hi_res`, `high`, `low`)
 SERVER_REQUEST_TIMEOUT_MS 10000 Public route deadline
 RATE_LIMIT_WINDOW_MS 60000 Rate-limit window
 RATE_LIMIT_MAX_REQUESTS 60 Requests per client/window

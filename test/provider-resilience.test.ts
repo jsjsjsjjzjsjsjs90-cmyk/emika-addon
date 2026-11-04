@@ -21,6 +21,7 @@ function config(overrides: Partial<Config> = {}): Config {
     enabledSources: new Set(),
     sourceSearchTimeoutMs: 100,
     qobuzdlPlanLimitCooldownMs: 1000,
+    remoteAddonQualityCase: 'upper',
     sourceHealthTimeoutMs: 200,
     rateLimitWindowMs: 1000,
     rateLimitMaxRequests: 10,
@@ -91,6 +92,31 @@ test('remote addon accepts a manifest URL and uses a direct streamURL fallback',
       url: 'https://media.example.test/direct-1.flac',
       format: 'flac', quality: 'LOSSLESS', manifest: 'none', encrypted: false,
     });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('remote addon can send lowercase quality values for Aurix-compatible addons', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    requests.push(String(input));
+    return new Response(JSON.stringify({ tracks: [{ id: 'aurix-42', title: 'Track', artist: 'Artist' }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new RemoteAddonProvider(
+      config({ remoteAddonQualityCase: 'lower' }),
+      'https://aurix.example.test/base',
+    );
+    await provider.search('track', 'LOSSLESS', 'auto');
+    await provider.getStream('aurix-42', 'HI_RES', 'off');
+    assert.equal(requests[0], 'https://aurix.example.test/base/search?q=track&quality=lossless&atmos=auto');
+    assert.equal(requests[1], 'https://aurix.example.test/base/stream/aurix-42?quality=hi_res&atmos=off');
   } finally {
     globalThis.fetch = originalFetch;
   }

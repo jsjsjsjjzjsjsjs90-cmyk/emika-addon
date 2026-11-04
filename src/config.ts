@@ -40,6 +40,7 @@ export interface Config {
   sourceSearchTimeoutMs: number;
   qobuzdlPlanLimitCooldownMs: number;
   remoteAddonTimeoutMs?: number;
+  remoteAddonQualityCase: 'upper' | 'lower';
   sourceHealthTimeoutMs: number;
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
@@ -75,6 +76,10 @@ const nonNegativeInt = (name: string, fallback: number): number => {
   if (!Number.isInteger(value) || value < 0) return fallback;
   return value;
 };
+
+function parseRemoteAddonQualityCase(raw?: string): 'upper' | 'lower' {
+  return raw?.trim().toLowerCase() === 'lower' ? 'lower' : 'upper';
+}
 
 export function parseZeroOneFlag(raw: string | undefined, fallback = false): boolean {
   const normalized = raw?.trim();
@@ -179,6 +184,7 @@ export function loadConfig(): Config {
     sourceSearchTimeoutMs,
     qobuzdlPlanLimitCooldownMs: positiveInt('QOBUZDL_PLAN_LIMIT_COOLDOWN_SECONDS', 60) * 1000,
     remoteAddonTimeoutMs: positiveInt('REMOTE_ADDON_TIMEOUT_MS', 8000),
+    remoteAddonQualityCase: parseRemoteAddonQualityCase(process.env.REMOTE_ADDON_QUALITY_CASE),
     sourceHealthTimeoutMs: positiveInt(
       'SOURCE_HEALTH_TIMEOUT_MS',
       Math.min(requestTimeoutMs, serverRequestTimeoutMs),
@@ -193,7 +199,9 @@ export function loadConfig(): Config {
     allowSignedUiSession: parseZeroOneFlag(process.env.EMIKA_ALLOW_SIGNED_UI_SESSION),
     uiSessionTtlSeconds: positiveInt('EMIKA_UI_SESSION_TTL_SECONDS', 3600),
     userAgent: process.env.EMIKA_USER_AGENT?.trim() || 'BitChord/v1.9',
-    proxyWebMedia: parseZeroOneFlag(process.env.EMIKA_PROXY_WEB_MEDIA, true),
+    // Browser playback uses the provider URL by default. Set EMIKA_PROXY_WEB_MEDIA=1
+    // only when an operator explicitly wants the addon to proxy /media.
+    proxyWebMedia: parseZeroOneFlag(process.env.EMIKA_PROXY_WEB_MEDIA, false),
     directStreamBitChord: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_BITCHORD, true),
     directStreamLastWave: parseZeroOneFlag(process.env.EMIKA_DIRECT_STREAM_LASTWAVE, true),
     downloadSources: parseEnabledSources(process.env.EMIKA_DOWNLOAD_SOURCES ?? ''),

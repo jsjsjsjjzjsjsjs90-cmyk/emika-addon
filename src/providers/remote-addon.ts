@@ -24,8 +24,12 @@ export class RemoteAddonProvider implements QobuzProvider {
 
   constructor(private readonly config: Config, private readonly configuredBaseUrl?: string) {}
 
+  private upstreamQuality(quality: Quality): string {
+    return this.config.remoteAddonQualityCase === 'lower' ? quality.toLowerCase() : quality;
+  }
+
   async search(query: string, quality: Quality, atmos: string): Promise<QobuzTrack[]> {
-    const body = await this.request('/search', { q: query, quality, atmos });
+    const body = await this.request('/search', { q: query, quality: this.upstreamQuality(quality), atmos });
     const items = isRecord(body) && Array.isArray(body.tracks) ? body.tracks : Array.isArray(body) ? body : [];
     const tracks = items.filter(isRecord).map(toTrack).filter((track): track is QobuzTrack => track !== null);
     for (const track of tracks) {
@@ -79,7 +83,10 @@ export class RemoteAddonProvider implements QobuzProvider {
     }
 
     try {
-      const body = await this.request(`/stream/${encodeURIComponent(cleanId)}`, { quality, atmos });
+      const body = await this.request(`/stream/${encodeURIComponent(cleanId)}`, {
+        quality: this.upstreamQuality(quality),
+        atmos,
+      });
       if (!isRecord(body) || typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
       return {
         url: body.url, format: typeof body.format === 'string' ? body.format : undefined,

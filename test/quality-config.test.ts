@@ -69,6 +69,21 @@ test('User-Agent settings are configurable and safe by default', () => {
   }
 });
 
+test('remote addon quality case defaults to upper and supports Aurix lower mode', () => {
+  const previous = process.env.REMOTE_ADDON_QUALITY_CASE;
+  try {
+    delete process.env.REMOTE_ADDON_QUALITY_CASE;
+    assert.equal(loadConfig().remoteAddonQualityCase, 'upper');
+    process.env.REMOTE_ADDON_QUALITY_CASE = 'lower';
+    assert.equal(loadConfig().remoteAddonQualityCase, 'lower');
+    process.env.REMOTE_ADDON_QUALITY_CASE = 'invalid';
+    assert.equal(loadConfig().remoteAddonQualityCase, 'upper');
+  } finally {
+    if (previous === undefined) delete process.env.REMOTE_ADDON_QUALITY_CASE;
+    else process.env.REMOTE_ADDON_QUALITY_CASE = previous;
+  }
+});
+
 test('Signed UI Session settings are disabled by default and configurable', () => {
   const previousEnabled = process.env.EMIKA_ALLOW_SIGNED_UI_SESSION;
   const previousTtl = process.env.EMIKA_UI_SESSION_TTL_SECONDS;
@@ -89,7 +104,7 @@ test('Signed UI Session settings are disabled by default and configurable', () =
   }
 });
 
-test('stream routing defaults to proxy and enables native direct modes independently', () => {
+test('stream routing defaults to direct web media and enables native direct modes independently', () => {
   const previous = {
     proxy: process.env.EMIKA_PROXY_WEB_MEDIA,
     bitChord: process.env.EMIKA_DIRECT_STREAM_BITCHORD,
@@ -100,7 +115,7 @@ test('stream routing defaults to proxy and enables native direct modes independe
     delete process.env.EMIKA_DIRECT_STREAM_BITCHORD;
     delete process.env.EMIKA_DIRECT_STREAM_LASTWAVE;
     let config = loadConfig();
-    assert.equal(config.proxyWebMedia, true);
+    assert.equal(config.proxyWebMedia, false);
     assert.equal(config.directStreamBitChord, true);
     assert.equal(config.directStreamLastWave, true);
 

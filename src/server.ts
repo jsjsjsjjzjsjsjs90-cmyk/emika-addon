@@ -309,7 +309,7 @@ function registerAddon(
           trackNames.set(track.id, downloadFilename(baseName, track.format));
         }
         while (trackNames.size > 2_000) trackNames.delete(trackNames.keys().next().value as string);
-        const responseTracks = isLastWaveUserAgent(request.headers['user-agent'])
+        const responseTracks = isLastWaveUserAgent(request.headers['user-agent']) && config.proxyWebMedia
           ? tracks.map((track) => {
               if (track.streamURL) return track;
               const forwardedProtocol = request.headers['x-forwarded-proto'];
