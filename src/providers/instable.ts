@@ -104,7 +104,7 @@ export class InstableProvider implements QobuzProvider {
 
     try {
       const body = await this.request(path, params);
-      const stream = toStream(body, quality);
+      const stream = toStream(body, quality, effectiveQuality);
       // Metadata is only safe to reuse for the exact rendition that was searched.
       // Do not let a Hi-Res search annotate a later Lossless/High/Atmos stream.
       // For BitChord's LOSSLESS request, effectiveQuality may intentionally be
@@ -252,10 +252,17 @@ function toTrack(raw: RecordValue, requested: Quality, hiResEnabled: boolean): Q
   const isHighQuality = requested === 'HIGH';
   const hasHiResEvidence = hires || (maximumSamplingRate ?? 0) > 48000 || (bitDepth ?? 0) > 16;
   const suppressHiResMetadata = isHighQuality || requested === 'LOSSLESS' && !hiResEnabled && hasHiResEvidence;
+  // Quality 6 is the selected CD-lossless rendition. When Hi-Res is disabled,
+  // Instable may still return only the catalogue's maximum (Hi-Res) metadata,
+  // or omit rendition metadata entirely. Do not expose that maximum on a
+  // LOSSLESS search; describe the actual selected rendition instead.
+  const selectedLosslessMetadata = requested === 'LOSSLESS' && !hiResEnabled;
+  const losslessSampleRate = selectedLosslessMetadata ? 44_100 : undefined;
+  const losslessBitDepth = selectedLosslessMetadata ? 16 : undefined;
   let audioQuality: string | undefined;
   if (isHighQuality) audioQuality = 'HIGH';
   else if (hires && !suppressHiResMetadata) audioQuality = 'HI_RES_LOSSLESS';
-  else if (bitDepth !== undefined && bitDepth >= 16) audioQuality = 'LOSSLESS';
+  else if (selectedLosslessMetadata || bitDepth !== undefined && bitDepth >= 16) audioQuality = 'LOSSLESS';
 
   return {
     upstreamId: String(id),
@@ -265,16 +272,18 @@ function toTrack(raw: RecordValue, requested: Quality, hiResEnabled: boolean): Q
     duration:   typeof raw.duration === 'number' ? raw.duration : undefined,
     isrc:       stringValue(raw.isrc ?? raw.ISRC ?? raw.isrc_code),
     artworkURL: image && typeof image.large === 'string' ? image.large : undefined,
-    format:     isHighQuality ? 'mp3' : bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
+    format:     isHighQuality ? 'mp3' : selectedLosslessMetadata || bitDepth !== undefined && bitDepth >= 16 ? 'flac' : undefined,
     audioQuality,
-    sampleRate: !suppressHiResMetadata && maximumSamplingRate !== undefined
-      ? (maximumSamplingRate < 1000 ? maximumSamplingRate * 1000 : maximumSamplingRate)
-      : undefined,
-    bitDepth: suppressHiResMetadata ? undefined : bitDepth,
+    sampleRate: selectedLosslessMetadata
+      ? losslessSampleRate
+      : !suppressHiResMetadata && maximumSamplingRate !== undefined
+        ? (maximumSamplingRate < 1000 ? maximumSamplingRate * 1000 : maximumSamplingRate)
+        : undefined,
+    bitDepth: selectedLosslessMetadata ? losslessBitDepth : suppressHiResMetadata ? undefined : bitDepth,
   };
 }
 
-function toStream(body: unknown, requested: Quality): QobuzStream {
+function toStream(body: unknown, requested: Quality, effectiveQuality = requested): QobuzStream {
   if (!isRecord(body)) throw new UpstreamError(502, 'Instable stream response malformed');
   const data = isRecord(body.data) ? body.data : body;
 
@@ -293,6 +302,7 @@ function toStream(body: unknown, requested: Quality): QobuzStream {
     undefined;
   const format = mime && mime.includes('/') ? mime.split('/').pop() : mime;
   const normalizedFormat = format?.toLowerCase();
+  const isSelectedCdLossless = effectiveQuality === 'LOSSLESS' && normalizedFormat === 'flac';
 
   return {
     url,
@@ -303,14 +313,14 @@ function toStream(body: unknown, requested: Quality): QobuzStream {
     manifest: 'none',
     encrypted: false,
     expiresAt: numberValue(data.expiresAt ?? data.expires_at ?? data.expiry),
-    sampleRate: numberValue(data.sampleRate),
-    bitDepth: numberValue(data.bitDepth),
+    sampleRate: numberValue(data.sampleRate) ?? (isSelectedCdLossless ? 44_100 : undefined),
+    bitDepth: numberValue(data.bitDepth) ?? (isSelectedCdLossless ? 16 : undefined),
     bitrate: numberValue(data.bitrate),
     audioMode: stringValue(data.audioMode ?? data.audio_mode),
     audioModes: stringArray(data.audioModes ?? data.audio_modes),
     atmos: booleanValue(data.atmos ?? data.isAtmos ?? data.dolbyAtmos),
     streamQuality: stringValue(data.streamQuality ?? data.stream_quality),
-    audioQuality: stringValue(data.audioQuality ?? data.audio_quality),
+    audioQuality: stringValue(data.audioQuality ?? data.audio_quality) ?? (isSelectedCdLossless ? 'LOSSLESS' : undefined),
   };
 }
 

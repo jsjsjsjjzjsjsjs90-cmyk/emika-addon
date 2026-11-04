@@ -441,12 +441,34 @@ test('Instable does not upgrade LOSSLESS when HI_RES is disabled', async () => {
     }));
     const tracks = await provider.search('hi-res track', 'LOSSLESS', 'off');
     assert.equal(tracks[0]?.audioQuality, 'LOSSLESS');
-    assert.equal(tracks[0]?.sampleRate, undefined);
-    assert.equal(tracks[0]?.bitDepth, undefined);
+    assert.equal(tracks[0]?.format, 'flac');
+    assert.equal(tracks[0]?.sampleRate, 44100);
+    assert.equal(tracks[0]?.bitDepth, 16);
     const stream = await provider.getStream(tracks[0]!.upstreamId, 'LOSSLESS', 'off');
     assert.equal(requests[1], 'https://instable.example.test/api/player/stream/42?quality=6&atmos=off');
     assert.equal(stream?.sampleRate, 44100);
     assert.equal(stream?.bitDepth, 16);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Instable supplies CD metadata for LOSSLESS search without upstream metadata when HI_RES is disabled', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ tracks: [{ id: '43', title: 'CD Track' }] }), {
+    status: 200, headers: { 'content-type': 'application/json' },
+  })) as typeof fetch;
+
+  try {
+    const provider = new InstableProvider(config({
+      instableBaseUrl: 'https://instable.example.test',
+      enabledQualityTiers: new Set<Quality>(['LOSSLESS', 'HIGH', 'LOW']),
+    }));
+    const tracks = await provider.search('cd track', 'LOSSLESS', 'off');
+    assert.equal(tracks[0]?.format, 'flac');
+    assert.equal(tracks[0]?.audioQuality, 'LOSSLESS');
+    assert.equal(tracks[0]?.sampleRate, 44100);
+    assert.equal(tracks[0]?.bitDepth, 16);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -493,9 +515,9 @@ test('Instable does not reuse Hi-Res search metadata for a Lossless stream', asy
     const provider = new InstableProvider(config({ instableBaseUrl: 'https://instable.example.test' }));
     await provider.search('track', 'HI_RES', 'off');
     const stream = await provider.getStream('metadata-isolation', 'LOSSLESS', 'off');
-    assert.equal(stream?.sampleRate, undefined);
-    assert.equal(stream?.bitDepth, undefined);
-    assert.equal(stream?.audioQuality, undefined);
+    assert.equal(stream?.sampleRate, 44100);
+    assert.equal(stream?.bitDepth, 16);
+    assert.equal(stream?.audioQuality, 'LOSSLESS');
   } finally {
     globalThis.fetch = originalFetch;
   }
