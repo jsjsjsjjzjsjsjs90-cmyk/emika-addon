@@ -68,6 +68,39 @@ test('remote addon preserves a base path and sends the BitChord client identity'
   }
 });
 
+test('Deezer remote adapter preserves Unified source selectors and falls back only after 403', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: URL; userAgent: string | undefined }> = [];
+  globalThis.fetch = (async (input, init) => {
+    requests.push({
+      url: new URL(String(input)),
+      userAgent: new Headers(init?.headers).get('user-agent') ?? undefined,
+    });
+    if (requests.length === 1) return new Response(JSON.stringify({ error: 'BitChord User-Agent required' }), { status: 403 });
+    return new Response(JSON.stringify({ tracks: [{ id: '42', title: 'Unified Track', artist: 'Artist' }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new RemoteAddonProvider(
+      config({ userAgent: 'BitChord/1.9', remoteAddonFallbackUserAgent: 'Mozilla/5.0' }),
+      'https://remote.example.test/quality/manifest.json?sources=tidal',
+    );
+    const tracks = await provider.search('unified', 'LOSSLESS', 'auto');
+    assert.equal(tracks[0]?.upstreamId, '42');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0]?.userAgent, 'BitChord/1.9');
+    assert.equal(requests[1]?.userAgent, 'Mozilla/5.0');
+    assert.equal(requests[1]?.url.pathname, '/quality/search');
+    assert.equal(requests[1]?.url.searchParams.get('sources'), 'tidal');
+    assert.equal(requests[1]?.url.searchParams.get('quality'), 'LOSSLESS');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('remote addon accepts a manifest URL and uses a direct streamURL fallback', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];

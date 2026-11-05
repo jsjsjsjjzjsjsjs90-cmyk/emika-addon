@@ -56,7 +56,7 @@ test('User-Agent settings are configurable and safe by default', () => {
     delete process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT;
     delete process.env.EMIKA_USER_AGENT;
     assert.equal(loadConfig().requireBitChordUserAgent, false);
-    assert.equal(loadConfig().userAgent, 'BitChord/v1.9');
+    assert.equal(loadConfig().userAgent, 'BitChord/1.9');
     process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT = '1';
     process.env.EMIKA_USER_AGENT = 'Emika/2.0';
     assert.equal(loadConfig().requireBitChordUserAgent, true);

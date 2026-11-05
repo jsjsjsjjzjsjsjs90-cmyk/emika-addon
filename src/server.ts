@@ -27,12 +27,15 @@ const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
   const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/') || pathname.includes('/media/') || pathname.includes('/download/');
-  const hasBitChordIdentity = isBitChordUserAgent(request.headers['user-agent']);
+  // The private gate is for supported native clients, not BitChord alone.
+  // This keeps the addon compatible with LastWave and future native clients
+  // without opening the resource to arbitrary browser User-Agents.
+  const hasSupportedNativeIdentity = isSupportedNativeUserAgent(request.headers['user-agent']);
   const hasUiSession = config.allowSignedUiSession && verifyUiSession(
     readCookie(request.headers.cookie, UI_SESSION_COOKIE),
     config.idSecret,
   );
-  if (config.requireBitChordUserAgent && isAddonResource && !hasBitChordIdentity && !hasUiSession) {
+  if (config.requireBitChordUserAgent && isAddonResource && !hasSupportedNativeIdentity && !hasUiSession) {
     return reply.code(403).send({ error: 'BitChord User-Agent required' });
   }
   if (!pathname.includes('/search') && !pathname.includes('/stream/') && !pathname.includes('/media/') && !pathname.includes('/download/') && pathname !== '/health/sources') return;

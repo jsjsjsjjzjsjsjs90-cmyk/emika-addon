@@ -29,6 +29,10 @@ Six upstream adapters. Which ones are live is controlled by `QOBUZ_ENABLED_SOURC
 
 When multiple sources are enabled, `/search` races them and resolves with the first non-empty result. Each source has its own timeout (`SOURCE_SEARCH_TIMEOUT_MS`), so a hung provider cannot block the whole request.
 
+### Deezer/Unified renovation
+
+The `deezer` source is a compatibility adapter for any Unified-compatible remote addon; it is not hard-wired to a Deezer credential or provider. Set `DEEZER_BASE_URL` to the addon manifest URL, including its path token and source selector when required, for example a URL ending in `/quality/manifest.json?sources=tidal`. Emika preserves those base query parameters for both `/search` and `/stream` calls, sends the configured native User-Agent first, and retries with `REMOTE_ADDON_FALLBACK_USER_AGENT` only after an explicit HTTP 403. Once the fallback is accepted, it is reused for the lifetime of that provider instance rather than sending unsupported identities repeatedly. Tokens belong in deployment environment variables, never in this repository.
+
 ---
 
 ## HTTP contract
@@ -146,6 +150,7 @@ REQUEST_TIMEOUT_MS 6000 Upstream request timeout
 UPSTREAM_RETRIES 1 Retries on retryable upstream 5xx
 CACHE_TTL_SECONDS 300 Search cache TTL
 REMOTE_ADDON_QUALITY_CASE upper Quality enum casing sent to remote addons; use `lower` for Aurix (`lossless`, `hi_res`, `high`, `low`)
+REMOTE_ADDON_FALLBACK_USER_AGENT Mozilla/5.0 Generic UA used only after a remote addon explicitly returns HTTP 403
 SERVER_REQUEST_TIMEOUT_MS 10000 Public route deadline
 RATE_LIMIT_WINDOW_MS 60000 Rate-limit window
 RATE_LIMIT_MAX_REQUESTS 60 Requests per client/window

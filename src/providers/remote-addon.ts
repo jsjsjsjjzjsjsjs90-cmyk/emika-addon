@@ -21,8 +21,11 @@ const MAX_DIRECT_STREAMS = 1_000;
 
 export class RemoteAddonProvider implements QobuzProvider {
   private readonly directStreams = new Map<string, DirectStream>();
+  private acceptedUserAgent: string;
 
-  constructor(private readonly config: Config, private readonly configuredBaseUrl?: string) {}
+  constructor(private readonly config: Config, private readonly configuredBaseUrl?: string) {
+    this.acceptedUserAgent = config.userAgent;
+  }
 
   private upstreamQuality(quality: Quality): string {
     return this.config.remoteAddonQualityCase === 'lower' ? quality.toLowerCase() : quality;
@@ -120,22 +123,27 @@ export class RemoteAddonProvider implements QobuzProvider {
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
     let base = (this.configuredBaseUrl ?? this.config.deezerBaseUrl ?? 'https://bitchord-hires-addon.vercel.app').trim();
+    const inheritedParams = new URLSearchParams();
     if (!base.startsWith('http://') && !base.startsWith('https://')) {
       base = 'https://' + base;
     }
     try {
       const parsed = new URL(base);
+      for (const [key, value] of parsed.searchParams) inheritedParams.append(key, value);
+      parsed.search = '';
+      parsed.hash = '';
       if (parsed.pathname.endsWith('/manifest.json')) {
         parsed.pathname = parsed.pathname.slice(0, -'/manifest.json'.length) || '/';
-        parsed.search = '';
-        parsed.hash = '';
-        base = parsed.toString().replace(/\/$/, '');
       }
+      base = parsed.toString().replace(/\/$/, '');
     } catch {
       throw new UpstreamError(502, 'Remote addon base URL is invalid');
     }
     
     const url = new URL(path.replace(/^\/+/, ''), base.endsWith('/') ? base : `${base}/`);
+    for (const [key, value] of inheritedParams) {
+      if (!url.searchParams.has(key)) url.searchParams.set(key, value);
+    }
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const controller = new AbortController();
     const timeout = setTimeout(
@@ -144,16 +152,25 @@ export class RemoteAddonProvider implements QobuzProvider {
     );
     
     try {
-      const response = await fetch(url, { 
-        headers: { 
+      const headers = {
           accept: 'application/json',
           'accept-language': 'en-US,en;q=0.9,th;q=0.8',
-          'user-agent': this.config.userAgent,
+          'user-agent': this.acceptedUserAgent,
           'referer': base.replace(/\/$/, '') + '/',
           'origin': base.replace(/\/$/, '')
-        }, 
-        signal: controller.signal 
+        };
+      let response = await fetch(url, {
+        headers,
+        signal: controller.signal,
       });
+      const fallbackUserAgent = this.config.remoteAddonFallbackUserAgent?.trim() || 'Mozilla/5.0';
+      if (response.status === 403 && this.acceptedUserAgent === this.config.userAgent && fallbackUserAgent !== this.acceptedUserAgent) {
+        response = await fetch(url, {
+          headers: { ...headers, 'user-agent': fallbackUserAgent },
+          signal: controller.signal,
+        });
+        if (response.ok) this.acceptedUserAgent = fallbackUserAgent;
+      }
       let body: unknown;
       try { 
         body = await response.json(); 

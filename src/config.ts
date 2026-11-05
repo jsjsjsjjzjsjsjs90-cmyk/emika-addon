@@ -41,6 +41,7 @@ export interface Config {
   qobuzdlPlanLimitCooldownMs: number;
   remoteAddonTimeoutMs?: number;
   remoteAddonQualityCase: 'upper' | 'lower';
+  remoteAddonFallbackUserAgent?: string;
   sourceHealthTimeoutMs: number;
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
@@ -185,6 +186,7 @@ export function loadConfig(): Config {
     qobuzdlPlanLimitCooldownMs: positiveInt('QOBUZDL_PLAN_LIMIT_COOLDOWN_SECONDS', 60) * 1000,
     remoteAddonTimeoutMs: positiveInt('REMOTE_ADDON_TIMEOUT_MS', 8000),
     remoteAddonQualityCase: parseRemoteAddonQualityCase(process.env.REMOTE_ADDON_QUALITY_CASE),
+    remoteAddonFallbackUserAgent: process.env.REMOTE_ADDON_FALLBACK_USER_AGENT?.trim() || 'Mozilla/5.0',
     sourceHealthTimeoutMs: positiveInt(
       'SOURCE_HEALTH_TIMEOUT_MS',
       Math.min(requestTimeoutMs, serverRequestTimeoutMs),
@@ -198,7 +200,7 @@ export function loadConfig(): Config {
     requireBitChordUserAgent: parseZeroOneFlag(process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT),
     allowSignedUiSession: parseZeroOneFlag(process.env.EMIKA_ALLOW_SIGNED_UI_SESSION),
     uiSessionTtlSeconds: positiveInt('EMIKA_UI_SESSION_TTL_SECONDS', 3600),
-    userAgent: process.env.EMIKA_USER_AGENT?.trim() || 'BitChord/v1.9',
+    userAgent: process.env.EMIKA_USER_AGENT?.trim() || 'BitChord/1.9',
     // Browser playback uses the provider URL by default. Set EMIKA_PROXY_WEB_MEDIA=1
     // only when an operator explicitly wants the addon to proxy /media.
     proxyWebMedia: parseZeroOneFlag(process.env.EMIKA_PROXY_WEB_MEDIA, false),
