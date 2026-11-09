@@ -28,7 +28,7 @@ export class RemoteAddonProvider implements QobuzProvider {
   }
 
   private upstreamQuality(quality: Quality): string {
-    return this.config.remoteAddonQualityCase === 'lower' ? quality.toLowerCase() : quality;
+    return quality;
   }
 
   async search(query: string, quality: Quality, atmos: string): Promise<QobuzTrack[]> {

@@ -69,18 +69,24 @@ test('User-Agent settings are configurable and safe by default', () => {
   }
 });
 
-test('remote addon quality case defaults to upper and supports Aurix lower mode', () => {
-  const previous = process.env.REMOTE_ADDON_QUALITY_CASE;
+test('BitChord auth is disabled by default and configurable with host binding', () => {
+  const previousAuth = process.env.EMIKA_BITCHORD_AUTH;
+  const previousHosts = process.env.EMIKA_BITCHORD_AUTH_HOSTS;
   try {
-    delete process.env.REMOTE_ADDON_QUALITY_CASE;
-    assert.equal(loadConfig().remoteAddonQualityCase, 'upper');
-    process.env.REMOTE_ADDON_QUALITY_CASE = 'lower';
-    assert.equal(loadConfig().remoteAddonQualityCase, 'lower');
-    process.env.REMOTE_ADDON_QUALITY_CASE = 'invalid';
-    assert.equal(loadConfig().remoteAddonQualityCase, 'upper');
+    delete process.env.EMIKA_BITCHORD_AUTH;
+    delete process.env.EMIKA_BITCHORD_AUTH_HOSTS;
+    assert.equal(loadConfig().bitchordAuth, false);
+    assert.deepEqual([...loadConfig().bitchordAuthHosts], []);
+    process.env.EMIKA_BITCHORD_AUTH = '1';
+    process.env.EMIKA_BITCHORD_AUTH_HOSTS = 'EmikaAddon.example.com, api.example.com. ';
+    const config = loadConfig();
+    assert.equal(config.bitchordAuth, true);
+    assert.deepEqual([...config.bitchordAuthHosts].sort(), ['api.example.com', 'emikaaddon.example.com']);
   } finally {
-    if (previous === undefined) delete process.env.REMOTE_ADDON_QUALITY_CASE;
-    else process.env.REMOTE_ADDON_QUALITY_CASE = previous;
+    if (previousAuth === undefined) delete process.env.EMIKA_BITCHORD_AUTH;
+    else process.env.EMIKA_BITCHORD_AUTH = previousAuth;
+    if (previousHosts === undefined) delete process.env.EMIKA_BITCHORD_AUTH_HOSTS;
+    else process.env.EMIKA_BITCHORD_AUTH_HOSTS = previousHosts;
   }
 });
 

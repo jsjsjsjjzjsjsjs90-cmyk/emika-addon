@@ -40,7 +40,6 @@ export interface Config {
   sourceSearchTimeoutMs: number;
   qobuzdlPlanLimitCooldownMs: number;
   remoteAddonTimeoutMs?: number;
-  remoteAddonQualityCase: 'upper' | 'lower';
   remoteAddonFallbackUserAgent?: string;
   sourceHealthTimeoutMs: number;
   rateLimitWindowMs: number;
@@ -49,6 +48,8 @@ export interface Config {
   maxQueryLength: number;
   allowDownloads: boolean;
   checkValidLossless: boolean;
+  bitchordAuth: boolean;
+  bitchordAuthHosts: Set<string>;
   requireBitChordUserAgent: boolean;
   allowSignedUiSession: boolean;
   uiSessionTtlSeconds: number;
@@ -78,9 +79,6 @@ const nonNegativeInt = (name: string, fallback: number): number => {
   return value;
 };
 
-function parseRemoteAddonQualityCase(raw?: string): 'upper' | 'lower' {
-  return raw?.trim().toLowerCase() === 'lower' ? 'lower' : 'upper';
-}
 
 export function parseZeroOneFlag(raw: string | undefined, fallback = false): boolean {
   const normalized = raw?.trim();
@@ -96,6 +94,12 @@ function parseEnabledSources(raw?: string): Set<KnownSource> {
     .map((s) => s.trim().toLowerCase())
     .filter((s): s is KnownSource => (KNOWN_SOURCES as readonly string[]).includes(s));
   return new Set(parts);
+}
+
+function parseHosts(raw?: string): Set<string> {
+  return new Set((raw ?? '').split(',')
+    .map((value) => value.trim().toLowerCase().replace(/\.$/, ''))
+    .filter((value) => /^[a-z0-9.-]+$/.test(value)));
 }
 
 export function parseDisabledQualityTiers(raw?: string): Set<Quality> {
@@ -185,7 +189,6 @@ export function loadConfig(): Config {
     sourceSearchTimeoutMs,
     qobuzdlPlanLimitCooldownMs: positiveInt('QOBUZDL_PLAN_LIMIT_COOLDOWN_SECONDS', 60) * 1000,
     remoteAddonTimeoutMs: positiveInt('REMOTE_ADDON_TIMEOUT_MS', 8000),
-    remoteAddonQualityCase: parseRemoteAddonQualityCase(process.env.REMOTE_ADDON_QUALITY_CASE),
     remoteAddonFallbackUserAgent: process.env.REMOTE_ADDON_FALLBACK_USER_AGENT?.trim() || 'Mozilla/5.0',
     sourceHealthTimeoutMs: positiveInt(
       'SOURCE_HEALTH_TIMEOUT_MS',
@@ -197,6 +200,8 @@ export function loadConfig(): Config {
     maxQueryLength: positiveInt('MAX_QUERY_LENGTH', 200),
     allowDownloads: (process.env.EMIKA_ALLOW_DOWNLOADS ?? '').trim().toLowerCase() === 'true',
     checkValidLossless: parseZeroOneFlag(process.env.EMIKA_CHECK_VALID_LOSSLESS),
+    bitchordAuth: parseZeroOneFlag(process.env.EMIKA_BITCHORD_AUTH),
+    bitchordAuthHosts: parseHosts(process.env.EMIKA_BITCHORD_AUTH_HOSTS),
     requireBitChordUserAgent: parseZeroOneFlag(process.env.EMIKA_REQUIRE_BITCHORD_USER_AGENT),
     allowSignedUiSession: parseZeroOneFlag(process.env.EMIKA_ALLOW_SIGNED_UI_SESSION),
     uiSessionTtlSeconds: positiveInt('EMIKA_UI_SESSION_TTL_SECONDS', 3600),

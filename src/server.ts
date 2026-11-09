@@ -9,6 +9,7 @@ import { createProvider, createSourceProvider, type IsolatedSource } from './pro
 import { SlidingWindowRateLimiter, clientKey } from './rate-limit.js';
 import { normalizeHealthQuery } from './query.js';
 import { createUiSession, readCookie, UI_SESSION_COOKIE, verifyUiSession } from './ui-session.js';
+import { verifyBitChordRequest } from './bitchord-auth.js';
 import type { QobuzProvider, Quality, PublicTrack } from './types.js';
 
 const config = loadConfig();
@@ -19,7 +20,7 @@ const app = Fastify({
 app.addHook('onSend', async (_request, reply) => {
   reply.header('Access-Control-Allow-Origin', '*');
   reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Accept, Content-Type, Range');
+  reply.header('Access-Control-Allow-Headers', 'Accept, Content-Type, Range, X-BitChord-Token, X-BitChord-Proof');
   reply.header('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Length, Content-Range, Content-Disposition, Content-Type');
   reply.header('X-Content-Type-Options', 'nosniff');
 });
@@ -27,9 +28,28 @@ const limiter = new SlidingWindowRateLimiter(config.rateLimitMaxRequests, config
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?', 1)[0];
   const isAddonResource = pathname.endsWith('/manifest.json') || pathname.includes('/search') || pathname.includes('/stream/') || pathname.includes('/media/') || pathname.includes('/download/');
-  // The private gate is for supported native clients, not BitChord alone.
-  // This keeps the addon compatible with LastWave and future native clients
-  // without opening the resource to arbitrary browser User-Agents.
+  // Optional BitChord proof gate runs before the native-client identity gate.
+  const isProtectedAddonRoute = isAddonResource && !pathname.endsWith('/manifest.json');
+  if (config.bitchordAuth && isProtectedAddonRoute) {
+    const forwardedProtocol = firstForwardedValue(request.headers['x-forwarded-proto']);
+    const protocol = forwardedProtocol || request.protocol;
+    const host = firstForwardedValue(request.headers['x-forwarded-host'] ?? request.headers['x-original-host'])
+      ?? request.headers.host?.split(':')[0]
+      ?? '';
+    const result = protocol === 'https'
+      ? await verifyBitChordRequest(
+          typeof request.headers['x-bitchord-token'] === 'string' ? request.headers['x-bitchord-token'] : undefined,
+          typeof request.headers['x-bitchord-proof'] === 'string' ? request.headers['x-bitchord-proof'] : undefined,
+          host.toLowerCase().replace(/\.$/, ''),
+          config.bitchordAuthHosts,
+        )
+      : { ok: false as const, code: 'invalid_proof' };
+    if (!result.ok) {
+      reply.header('WWW-Authenticate', 'BitChord');
+      return reply.code(result.code === 'unavailable' ? 503 : 401).send({ error: result.code });
+    }
+  }
+  // Keep compatibility with BitChord, LastWave and future native clients.
   const hasSupportedNativeIdentity = isSupportedNativeUserAgent(request.headers['user-agent']);
   const hasUiSession = config.allowSignedUiSession && verifyUiSession(
     readCookie(request.headers.cookie, UI_SESSION_COOKIE),
@@ -265,6 +285,7 @@ function registerAddon(
         resources: ['search', 'stream'],
         allowDownloads: manifestAllowsDownloads(namespace) ? 1 : 0,
         checkValidLossless: config.checkValidLossless ? 1 : 0,
+        bitchordAuth: config.bitchordAuth,
         settings: [
           {
             key: 'quality',
