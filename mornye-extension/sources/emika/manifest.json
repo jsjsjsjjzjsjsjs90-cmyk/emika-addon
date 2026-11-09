@@ -1,0 +1,85 @@
+{
+  "name": "emika",
+  "displayName": "Emika",
+  "version": "0.1.0",
+  "description": "Emika metadata and direct-audio download provider.",
+  "homepage": "https://github.com/jsjsjsjjzjsjsjs90-cmyk/emika-addon",
+  "type": [
+    "metadata_provider",
+    "download_provider"
+  ],
+  "minAppVersion": "5.3.0",
+  "requiredRuntimeFeatures": [
+    "preparedContext@1"
+  ],
+  "permissions": {
+    "network": [
+      "emika-addon.vercel.app"
+    ],
+    "file": true
+  },
+  "qualityOptions": [
+    {
+      "id": "HI_RES",
+      "label": "Hi-Res",
+      "description": "Emika Hi-Res when the source provides it",
+      "kind": "lossless"
+    },
+    {
+      "id": "LOSSLESS",
+      "label": "Lossless",
+      "description": "Emika lossless FLAC",
+      "kind": "lossless"
+    },
+    {
+      "id": "HIGH",
+      "label": "High",
+      "description": "Emika high-quality lossy fallback",
+      "kind": "lossy"
+    },
+    {
+      "id": "LOW",
+      "label": "Low",
+      "description": "Emika low-bandwidth fallback",
+      "kind": "lossy"
+    }
+  ],
+  "capabilities": {
+    "downloadFallbackTier": "lossless",
+    "networkTimeoutSeconds": 20
+  },
+  "settings": [
+    {
+      "key": "endpoint",
+      "label": "Emika addon URL",
+      "type": "string",
+      "default": "https://emika-addon.vercel.app",
+      "grantsNetwork": true,
+      "description": "Public Emika manifest base URL."
+    },
+    {
+      "key": "quality",
+      "label": "Default quality",
+      "type": "select",
+      "default": "LOSSLESS",
+      "options": [
+        {
+          "value": "HI_RES",
+          "label": "Hi-Res"
+        },
+        {
+          "value": "LOSSLESS",
+          "label": "Lossless"
+        },
+        {
+          "value": "HIGH",
+          "label": "High"
+        },
+        {
+          "value": "LOW",
+          "label": "Low"
+        }
+      ]
+    }
+  ]
+}
