@@ -1,7 +1,7 @@
 "use strict";
 
 var CONFIG = {
-  endpoint: "https://emika-addon.vercel.app",
+  endpoint: "https://api.zarz.moe/v1/dl/tid2",
   quality: "LOSSLESS"
 };
 
