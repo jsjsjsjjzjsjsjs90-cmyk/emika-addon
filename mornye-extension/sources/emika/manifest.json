@@ -120,7 +120,7 @@
     ]
   },
   "urlHandler": {
-    "enabled": False,
+    "enabled": true,
     "patterns": [
       "tidal://",
       "tidal://artist/{artist_id}",
